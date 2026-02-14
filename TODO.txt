@@ -1,0 +1,13 @@
+Close the game loop
+- Result strands from processing must be added back to the strand pool
+- Only the target strand is consumed; the source strand stays (it produced the enzyme, it isn't destroyed)
+- Unless self-targeting: then the strand is consumed once (it's the target)
+
+Allow self-targeting
+- Remove the !isSource guard from isValidTarget
+- Source strand should show bindable bases when it contains the binding pref
+- Clicking source strand body should trigger pulse/bind, not deselect
+- Deselection only via clicking the enzyme badge again
+
+Entrance animation for result strands
+- When results return to the pool, animate them in (fade/slide)
