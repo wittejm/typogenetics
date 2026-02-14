@@ -1,4 +1,6 @@
-export const aminoLabel: Record<string, string> = {
+import type { Amino } from './model/types'
+
+export const aminoLabel: Record<Amino, string> = {
   cut: 'cut',
   del: 'del',
   swi: 'swi',

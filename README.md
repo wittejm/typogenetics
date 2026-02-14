@@ -33,7 +33,9 @@ Two-panel layout. Left: strand pool with expandable enzyme badges. Right: animat
 
 In GEB, Hofstadter's prize target is the self-reproducing strand — a strand whose enzymes, operating on itself, produce a copy of itself. This is the Typogenetics analogue of Gödel's self-referential sentence.
 
-This simulator takes a different approach: any enzyme can operate on any strand, not just its source. With N strands producing M total enzymes, each generation applies every enzyme to every strand, producing up to N×M output strands (more when cuts split strands, fewer when enzymes fall off). This all-pairs model opens up relational dynamics that the self-referential model can't express:
+This simulator takes a different approach: any enzyme can operate on any strand, not just its source. Rather than computing all pairs exhaustively (which is how prior academic work approached it, hitting combinatorial walls beyond ~4 strands), each timestep randomly picks one enzyme-strand pair, runs the operation, and feeds the results back into the pool. This is closer to how actual chemistry works — molecules collide stochastically, not all at once — and it means the pool can grow large without the cost scaling combinatorially. Patterns emerge from the dynamics rather than being searched for.
+
+This opens up relational dynamics that the self-referential model can't express:
 
 - **Mutual reproduction** — strand A's enzymes on B produce A, and vice versa. A symbiotic pair.
 - **Parasitism** — A's enzymes on B produce copies of A. A thrives at B's expense.
@@ -41,7 +43,7 @@ This simulator takes a different approach: any enzyme can operate on any strand,
 - **Autocatalytic sets** — a group of strands that collectively sustain each other, none self-reproducing alone but self-sustaining as a set (a real origin-of-life concept from Stuart Kauffman's work).
 - **Extinction and dominance** — some strands take over the pool, others die out. Population dynamics emerge from pure string rewriting.
 
-This also departs from GEB's execution model. In the book, generations are synchronous: all enzymes operate on the current pool simultaneously, and the collected outputs replace the pool as the next generation. The current UI runs one enzyme-on-strand operation at a time, feeding results back into the pool incrementally. This means order matters — early results change the pool that later operations see — making it a fundamentally different dynamical system.
+This departs from GEB's synchronous generational model (all enzymes operate on the current pool simultaneously, outputs replace the pool). Instead, each random operation immediately mutates the pool, so earlier reactions influence what's available for later ones — a fundamentally different dynamical system, and a deliberate choice.
 
 The interesting questions become ecological: does the pool reach a fixed point? Do certain strands act as keystone species? What starting pools produce the richest dynamics?
 

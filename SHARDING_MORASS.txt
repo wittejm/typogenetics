@@ -1,0 +1,77 @@
+Why parallelizing the headless search was so painful
+====================================================
+
+The goal: run N copies of the strand-checking logic across CPU cores.
+The search is embarrassingly parallel — every strand is independent.
+Should be easy. Was not.
+
+The problem stack
+-----------------
+
+1. The codebase uses .ts extension imports everywhere (e.g.
+   `import { translate } from '../model/ribosome.ts'`). This is
+   required by Vite's bundler mode and the tsconfig's
+   `allowImportingTsExtensions: true` setting. It works great in
+   the browser because Vite resolves them. It works great in the
+   main process because tsx handles them.
+
+2. Node 24's native TypeScript support ("type stripping") can
+   parse .ts files, but does NOT resolve .ts extensions in import
+   specifiers. So `import './foo.ts'` fails with
+   ERR_MODULE_NOT_FOUND looking for './foo' (no extension). This
+   means worker_threads running .ts files without tsx's loader
+   silently fall back to Node's native handling and explode.
+
+3. worker_threads accept an `execArgv` option for loader hooks.
+   We tried `execArgv: ['--import', 'tsx']`. This is tsx's
+   recommended approach. But in Node 24, the worker thread's
+   module resolution still didn't pick up tsx's hooks — the
+   imports failed with the same ERR_MODULE_NOT_FOUND.
+
+4. We tried inline eval with `register('tsx/esm', ...)` to
+   manually register tsx's loader inside the worker. Node 24
+   rejected this: "tsx must be loaded with --import instead of
+   --loader". tsx's ESM hook uses the old loader API internally,
+   which Node 24 has deprecated and errors on.
+
+5. We tried child_process.fork() with `execArgv: ['--import', 'tsx']`.
+   fork() runs a new Node process but reuses the parent's Node
+   binary. Same loader registration problem — the forked process
+   hit the same .ts extension resolution failure.
+
+6. We switched to child_process.spawn() calling the tsx binary
+   directly. This works because each child is a fresh tsx process
+   with full module resolution. Shard workers write TSV to stdout,
+   main process reads lines via readline. This approach actually
+   works — verified with standalone shard worker tests.
+
+7. But testing the full pipeline was confounded by:
+   - The user's previously-launched search instance was still
+     running, overwriting progress.json with its own state
+   - npx had a Homebrew EPERM issue unrelated to our code
+   - A mid-length resume at length 14 (268M strands) meant the
+     sequential "finish this length" fallback took forever,
+     making it look like parallel wasn't working
+   - Background process output capture was flaky
+
+Root cause
+----------
+
+tsx and Node's native TypeScript support are two different systems
+that both claim to handle .ts files but resolve imports differently.
+worker_threads and fork() inherit the parent's Node binary but NOT
+its tsx loader hooks reliably. The only clean boundary is a full
+process spawn — which is what we ended up with.
+
+The .ts extension in imports is the linchpin. If the codebase used
+extensionless imports, Node's native TS stripping would work fine
+in workers. But Vite requires the extensions. So we're stuck
+needing tsx in every process that touches the model code.
+
+Lesson
+------
+
+For CPU-parallel Node+TypeScript work: just spawn separate
+processes. Don't fight the loader system. The overhead of process
+spawn vs worker_threads is negligible for chunks of work that take
+seconds each.

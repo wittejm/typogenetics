@@ -1,0 +1,182 @@
+CLAUDE'S QUEST IN THE TYPOGENETICAL COMBINATORIAL SOUP
+=======================================================
+
+PROBLEM SPACE
+-------------
+
+Hofstadter's typogenetics defines a system where strings of bases (A, C, G, T)
+encode enzymes that operate on other strings. The "combinatorial soup" model
+throws many strands into a shared pool and lets them interact randomly:
+
+  1. Pick a random source strand, translate it to enzymes
+  2. Pick a random target strand
+  3. Bind the enzyme to a matching base on the target
+  4. Execute the enzyme (cut, delete, insert, copy, move, search...)
+  5. Collect result strands, return them to the pool
+  6. Repeat
+
+This is fundamentally different from self-operation (where a strand's enzymes
+act on itself). Here, strand A's enzyme acts on strand B. A strand's survival
+depends not on what it does to itself, but on the ecological web of cross-strand
+interactions. The unit of interest is the RELATIONSHIP, not the individual.
+
+The central question: does this system produce emergent ecological structure,
+or is it just entropy?
+
+
+WHAT WE'RE LOOKING FOR
+----------------------
+
+Interesting findings roughly ordered by how exciting they'd be:
+
+1. AUTOCATALYTIC SETS
+   A group of strands that collectively sustain all their members through
+   cross-catalysis. A's enzyme produces B (from some substrate), B's enzyme
+   produces C, C's enzyme produces A. The group is self-sustaining even though
+   no individual strand self-replicates. This would be the holy grail.
+
+2. STABLE MUTUAL PAIRS
+   The simplest autocatalytic set: A's enzyme produces B, B's enzyme produces A.
+   Not just a coincidental blip but a persistent relationship over thousands of
+   ops. Do they form? Do they resist invasion by other strands?
+
+3. PARASITISM
+   Strand A benefits from B's enzyme activity (B produces A) but A's enzymes
+   don't reciprocate — A either produces junk or actively destroys B. Does the
+   parasite kill its host? Do resistant hosts evolve?
+
+4. HUB STRANDS
+   Strands whose enzymes are unusually productive — they produce many different
+   strands from various substrates. Or strands that are produced by many
+   different catalysts (convergent production). What structural property makes
+   a strand a hub?
+
+5. STABLE ATTRACTORS
+   Does the pool converge to a fixed set of strands regardless of initial
+   conditions? Or does it diverge chaotically? Are there basins of attraction?
+
+6. THE ROLE OF COPY MODE
+   Enzymes with the "cop" amino activate copy mode, producing complementary
+   secondary strands. Does copy mode play a disproportionate role in interesting
+   dynamics? Are the most productive enzymes the ones that copy?
+
+7. STRUCTURAL PATTERNS
+   Do surviving strands share structural properties? Common subsequences,
+   specific lengths, particular duplet compositions? Is there a "grammar" of
+   fit strands?
+
+
+DEGENERATE DYNAMICS TO WATCH FOR
+---------------------------------
+
+Known failure modes that produce boring pools:
+
+- FRAGMENTATION DEATH: Without "filter inert," the pool fills with length-1
+  strands that can't produce enzymes. They're immortal junk. Solution: always
+  filter inert.
+
+- RUNAWAY LENGTH INFLATION: "Evict shortest" selects purely for length. Strands
+  grow without bound, all unique, zero convergence. No ecological structure.
+
+- RAPID EXTINCTION: "Consume source" with a small pool kills everything fast.
+  No time for structure to emerge.
+
+- RANDOM NOISE: Without eviction pressure on a growing pool, everything is
+  so dilute that repeat interactions never happen. Structure requires density.
+
+
+METHODOLOGY
+-----------
+
+Phase 1: Headless Simulation (TypeScript)
+
+  Write a Node script (run via tsx) that imports the existing model code and
+  runs the soup loop. Unlike the browser worker, this version logs FULL DATA:
+
+  - Every operation: (catalyst, enzyme_aminos, substrate, bind_position, products[])
+  - Pool snapshots at regular intervals
+  - Running tallies of production edges (catalyst -> product, with substrate)
+
+  Output structured JSON to files. Run for 50k-200k ops per experiment.
+
+  Configurations to sweep:
+  - Filter inert: always ON (we know OFF is degenerate)
+  - Eviction: none, random@200, random@500, oldest@200
+  - Consume source: on vs off
+  - Initial pool: default 13 strands, also try larger random pools
+
+Phase 2: Visualization (Python + matplotlib + networkx)
+
+  Read the JSON output. Render:
+
+  a) PRODUCTION GRAPH — force-directed layout of the catalytic network.
+     Nodes = strands in pool, edges = production relationships, edge weight =
+     frequency. Color nodes by: in-degree (how many things produce it),
+     out-degree (how many things it produces), strand length, pool frequency.
+
+  b) POOL COMPOSITION OVER TIME — stacked area chart or heatmap showing which
+     strands dominate the pool at each time window.
+
+  c) CYCLE DETECTION — highlight cycles in the production graph. Mutual pairs
+     (length-2 cycles), triangles (length-3), etc. Color them distinctly.
+
+  d) CATALYST vs PRODUCT PROFILES — for each strand, a mini bar chart: what
+     does it produce (out-edges) vs what produces it (in-edges)?
+
+  e) TRIPLE ANALYSIS — heatmap of (catalyst, product) frequency. Are certain
+     catalyst-product pairs robust across substrates, or substrate-dependent?
+
+Phase 3: Look, Think, Iterate
+
+  This is where the actual science happens. Render the graphs. LOOK at them.
+
+  - Is there visible clustering in the production graph?
+  - Do any nodes have unusually high connectivity?
+  - Are there isolated components (separate ecologies)?
+  - Do cycles exist? Are they stable over time or transient?
+
+  Form hypotheses based on what the pictures show. Re-run simulations to test
+  them. Zoom in on interesting strands — trace their full production history,
+  understand WHY they're interesting by examining the enzyme operations.
+
+Phase 4: Trace Interesting Cases
+
+  When a candidate finding appears (e.g., a mutual pair), drill deep:
+
+  - What are the actual enzyme amino sequences involved?
+  - What substrates does the enzyme operate on to produce the partner?
+  - Is the relationship robust (works on many substrates) or fragile?
+  - Does the pair persist over time or is it transient?
+  - Can it be reproduced from different initial conditions?
+
+  This is where findings become explainable, not just statistical.
+
+
+TOOLS AND SETUP
+---------------
+
+- TypeScript simulation: src/model/* already exists, script imports directly
+- Python visualization: venv with matplotlib, networkx, numpy
+- Image inspection: Claude reads rendered PNGs directly
+- Iteration: each cycle is ~2 min (run sim + render + look + think)
+- Output directory: analysis/ at project root
+
+
+WHAT SUCCESS LOOKS LIKE
+-----------------------
+
+The dream: "Here's a production graph from 100k ops. See that cluster of 4
+strands? They form an autocatalytic set — each one's enzyme produces the next.
+Here's the enzyme trace showing exactly how it works. The set emerged
+spontaneously at op ~15k and persisted for the remaining 85k ops. Here are the
+amino sequences that make it tick."
+
+The realistic good outcome: "Mutual pairs form but are transient — they last
+~500 ops before being disrupted. Here's a typical lifecycle. The production
+graph has hub-and-spoke structure, not cycles. Here's what makes a hub."
+
+The honest null result: "The production graph is structureless noise at every
+configuration I tried. Cross-strand typogenetics doesn't produce ecological
+structure. Here's the evidence, and here's a hypothesis for why."
+
+All three are findings worth sharing.
