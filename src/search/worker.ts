@@ -4,9 +4,17 @@ import type { Bucket } from './classify.ts'
 type ResultItem = { strand: string; results: string[]; bucket: Bucket }
 
 let running = false
+let paused = false
+let pauseResolve: (() => void) | null = null
+
+function waitIfPaused(): Promise<void> | undefined {
+  if (!paused) return
+  return new Promise<void>(r => { pauseResolve = r })
+}
 
 async function search() {
   running = true
+  paused = false
   let length = 1
   let checked = 0
 
@@ -15,6 +23,8 @@ async function search() {
     let sinceYield = 0
 
     for (const strand of generateStrands(length)) {
+      if (!running) return
+      await waitIfPaused()
       if (!running) return
 
       checked++
@@ -29,7 +39,7 @@ async function search() {
         }
       }
 
-      if (sinceYield >= 500) {
+      if (sinceYield >= 5) {
         if (batch.length > 0) {
           self.postMessage({ type: 'results', items: batch })
           batch = []
@@ -57,5 +67,13 @@ self.onmessage = (e: MessageEvent) => {
     if (!running) search()
   } else if (e.data.type === 'stop') {
     running = false
+    paused = false
+    pauseResolve?.()
+  } else if (e.data.type === 'pause') {
+    paused = true
+  } else if (e.data.type === 'resume') {
+    paused = false
+    pauseResolve?.()
+    pauseResolve = null
   }
 }

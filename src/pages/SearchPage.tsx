@@ -9,12 +9,26 @@ type ResultItem = { strand: string; results: string[]; bucket: string }
 type Progress = { length: number; checked: number }
 
 const BUCKET_META = [
-  { key: 'survivor', label: 'Survivor', tip: 'Produces itself — a self-replicator' },
-  { key: 'complement', label: 'Complement', tip: 'Produces its reverse complement (A↔T, C↔G, reversed) as a distinct strand' },
-  { key: 'survivorComplementSingle', label: 'Survivor + Complement (single op)', tip: 'One enzyme binding reproduces itself AND produces its reverse complement' },
-  { key: 'survivorComplementMulti', label: 'Survivor + Complement (multi op)', tip: 'Different enzyme bindings reproduce itself and produce its reverse complement' },
-  { key: 'pairBond', label: 'Pair Bond', tip: 'Two distinct strands that each produce the other\u2019s reverse complement — a mutual reproduction cycle' },
-  { key: 'novel', label: 'Novel', tip: 'Produces a strand that is neither itself nor its reverse complement — something genuinely new' },
+  { key: 'survivor', label: 'Survivor',
+    desc: 'One product of the self-operation is the original strand, unchanged. This is most likely to occur when the enzyme doesn\u2019t add or delete any bases from the strand.' },
+  { key: 'complement', label: 'Complement',
+    desc: 'One product of the self-operation is the reverse complement of the original strand. This is most likely to occur when the enzyme activates the COPY mode, and then moves along the entire strand.' },
+  { key: 'survivorComplementSingle', label: 'Survivor + Complement (single op)',
+    desc: 'The self-operation results in the unchanged strand AND its complete reverse complement.' },
+  { key: 'survivorComplementMulti', label: 'Survivor + Complement (multi op)',
+    desc: 'The self-operation results in the unchanged strand AND its complete reverse complement, but only does so by performing two operations that begin from different binding sites.' },
+  { key: 'pairBond', label: 'Pair Bond',
+    desc: 'One product of the self-operation is the strand\u2019s reverse complement, AND the product of THAT strand\u2019s self-operation is the original strand. This is wildly difficult to achieve and has not been found in strands up to length 15.' },
+  { key: 'hypercycle2', label: '2-Hypercycle',
+    desc: 'One product of the self-operation is a strand whose self-operation produces the original strand. This most likely to occur when a strand\u2019s enzyme deletes one of the bases in the strand, and the resulting strand\u2019s enzyme adds it back in in the same spot, or vice versa. Pretty cool! But also pretty common.' },
+  { key: 'hypercycle2NonTrivial', label: 'Non-trivial 2-Hypercycle',
+    desc: 'Same as above, but disallowing \u201cchange once and undo\u201d described above.' },
+  { key: 'hypercycle3', label: '3-Hypercycle',
+    desc: 'One of the strand\u2019s 3rd generation (and not less) of self-operation is identical to the original strand.' },
+  { key: 'hypercycle4', label: '4-Hypercycle',
+    desc: 'One of the strand\u2019s 4th generation (and not less) of self-operation is identical to the original strand.' },
+  { key: 'novel', label: 'Novel',
+    desc: 'Any strand that doesn\u2019t meet the above criteria but also whose self-operation creates a new strand.' },
 ] as const
 
 type BucketKey = (typeof BUCKET_META)[number]['key']
@@ -25,13 +39,19 @@ const EMPTY_BUCKETS: Record<BucketKey, ResultItem[]> = {
   survivorComplementSingle: [],
   survivorComplementMulti: [],
   pairBond: [],
+  hypercycle2: [],
+  hypercycle2NonTrivial: [],
+  hypercycle3: [],
+  hypercycle4: [],
   novel: [],
 }
 
-const MAX_DISPLAY = 200
+const MAX_DISPLAY = 50
+
+type SearchState = 'idle' | 'running' | 'paused'
 
 export default function SearchPage() {
-  const [running, setRunning] = useState(false)
+  const [state, setState] = useState<SearchState>('idle')
   const [progress, setProgress] = useState<Progress>({ length: 0, checked: 0 })
   const [buckets, setBuckets] = useState<Record<BucketKey, ResultItem[]>>({ ...EMPTY_BUCKETS })
   const [queue, setQueue] = useState<ProcessingData[]>([])
@@ -39,7 +59,34 @@ export default function SearchPage() {
   const advanceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const workerRef = useRef<Worker | null>(null)
 
+  const [expandedDescs, setExpandedDescs] = useState<Set<string>>(new Set())
+  const [collapsedBuckets, setCollapsedBuckets] = useState<Set<string>>(new Set())
+  const isIdle = state === 'idle'
   const processingData = queue.length > 0 ? queue[queueIndex] ?? null : null
+
+  const toggleDesc = useCallback((key: string) => {
+    setExpandedDescs(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }, [])
+
+  const toggleCollapse = useCallback((key: string) => {
+    setCollapsedBuckets(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+    setExpandedDescs(prev => {
+      if (!prev.has(key)) return prev
+      const next = new Set(prev)
+      next.delete(key)
+      return next
+    })
+  }, [])
 
   const handleStrandClick = useCallback((strand: string) => {
     if (advanceTimer.current) clearTimeout(advanceTimer.current)
@@ -74,41 +121,61 @@ export default function SearchPage() {
     })
   }, [queue.length])
 
-  const handleToggle = useCallback(() => {
-    if (running) {
-      workerRef.current?.postMessage({ type: 'stop' })
-      workerRef.current?.terminate()
-      workerRef.current = null
-      setRunning(false)
-    } else {
-      setProgress({ length: 0, checked: 0 })
-      setBuckets({ ...EMPTY_BUCKETS })
+  function createWorker() {
+    const w = new Worker(
+      new URL('../search/worker.ts', import.meta.url),
+      { type: 'module' },
+    )
 
-      const w = new Worker(
-        new URL('../search/worker.ts', import.meta.url),
-        { type: 'module' },
-      )
-
-      w.onmessage = (e: MessageEvent) => {
-        if (e.data.type === 'progress') {
-          setProgress({ length: e.data.length, checked: e.data.checked })
-        } else if (e.data.type === 'results') {
-          setBuckets(prev => {
-            const next = { ...prev }
-            for (const item of e.data.items as ResultItem[]) {
-              const key = item.bucket as BucketKey
-              next[key] = [...next[key], item]
-            }
-            return next
-          })
-        }
+    w.onmessage = (e: MessageEvent) => {
+      if (e.data.type === 'progress') {
+        setProgress({ length: e.data.length, checked: e.data.checked })
+      } else if (e.data.type === 'results') {
+        setBuckets(prev => {
+          const next = { ...prev }
+          for (const item of e.data.items as ResultItem[]) {
+            const key = item.bucket as BucketKey
+            if (next[key]) next[key] = [...next[key], item]
+          }
+          return next
+        })
       }
-
-      workerRef.current = w
-      w.postMessage({ type: 'start' })
-      setRunning(true)
     }
-  }, [running])
+
+    return w
+  }
+
+  const handleStart = useCallback(() => {
+    if (state === 'paused') {
+      workerRef.current?.postMessage({ type: 'resume' })
+      setState('running')
+      return
+    }
+
+    // Fresh start
+    setProgress({ length: 0, checked: 0 })
+    setBuckets({ ...EMPTY_BUCKETS })
+    const w = createWorker()
+    workerRef.current = w
+    w.postMessage({ type: 'start' })
+    setState('running')
+  }, [state])
+
+  const handlePause = useCallback(() => {
+    if (state === 'running') {
+      workerRef.current?.postMessage({ type: 'pause' })
+      setState('paused')
+    }
+  }, [state])
+
+  const handleReset = useCallback(() => {
+    workerRef.current?.postMessage({ type: 'stop' })
+    workerRef.current?.terminate()
+    workerRef.current = null
+    setState('idle')
+    setProgress({ length: 0, checked: 0 })
+    setBuckets({ ...EMPTY_BUCKETS })
+  }, [])
 
   useEffect(() => {
     return () => {
@@ -119,9 +186,24 @@ export default function SearchPage() {
 
   return (
     <div className="search-page">
+      <div className="search-intro">
+        <p>
+          Open question: What happens when strands produce enzymes that operate on their source strands? What patterns emerge?
+        </p>
+        <p>
+          This app performs an exhaustive search on strands of increasing length to locate strands that produce interesting behavior, defined in various ways:
+        </p>
+      </div>
+
       <div className="search-controls">
-        <button className="search-toggle" onClick={handleToggle}>
-          {running ? 'Stop' : 'Start'}
+        <button className="search-toggle" onClick={handleStart} disabled={state === 'running'}>
+          Start
+        </button>
+        <button className="search-toggle" onClick={handlePause} disabled={state !== 'running'}>
+          Pause
+        </button>
+        <button className="search-toggle" onClick={handleReset} disabled={state === 'running' || progress.length === 0}>
+          Reset
         </button>
         <span
           className="search-progress"
@@ -130,34 +212,53 @@ export default function SearchPage() {
             : ''}
         >
           {progress.length > 0
-            ? `Length ${progress.length} \u2014 ${progress.checked} / ${4 * (4 ** progress.length - 1) / 3} strands`
+            ? `Length ${progress.length} \u2014 ${progress.checked} / ${4 * (4 ** progress.length - 1) / 3} strands${state === 'paused' ? ' (paused)' : ''}`
             : 'Ready'}
         </span>
       </div>
 
       <div className="search-body">
         <div className="search-buckets">
-          {BUCKET_META.map(({ key, label, tip }) => {
+          {BUCKET_META.map(({ key, label, desc }) => {
             const items = buckets[key]
             const display = items.slice(-MAX_DISPLAY)
+            const descExpanded = expandedDescs.has(key)
+            const collapsed = collapsedBuckets.has(key)
             return (
               <div key={key} className="bucket">
-                <h3 className="bucket-header" title={tip}>
-                  {label} <span className="bucket-count">({items.length})</span>
+                <h3 className="bucket-header">
+                  <span className="bucket-header-left">
+                    {label}
+                    {!isIdle && (
+                      <button className="bucket-help-btn" onClick={() => toggleDesc(key)}>?</button>
+                    )}
+                    {!isIdle && <span className="bucket-count">({items.length})</span>}
+                  </span>
+                  {!isIdle && (
+                    <button className="bucket-collapse-btn" onClick={() => toggleCollapse(key)}>
+                      <span className="bucket-collapse-icon">≡</span>
+                    </button>
+                  )}
                 </h3>
-                <div className="bucket-list">
-                  {display.map((item, i) => (
-                    <div
-                      key={`${item.strand}-${i}`}
-                      className="bucket-entry"
-                      onClick={() => handleStrandClick(item.strand)}
-                    >
-                      <span className="strand">{item.strand}</span>
-                      <span className="bucket-arrow"> → </span>
-                      <span className="strand">{item.results.join(', ')}</span>
-                    </div>
-                  ))}
-                </div>
+                {isIdle && <p className="bucket-desc">{desc}</p>}
+                {!isIdle && descExpanded && !collapsed && (
+                  <p className="bucket-desc bucket-desc-collapsible">{desc}</p>
+                )}
+                {!isIdle && !collapsed && display.length > 0 && (
+                  <div className="bucket-list">
+                    {display.map((item, i) => (
+                      <div
+                        key={`${item.strand}-${i}`}
+                        className="bucket-entry"
+                        onClick={() => handleStrandClick(item.strand)}
+                      >
+                        <span className="strand">{item.strand}</span>
+                        <span className="bucket-arrow"> → </span>
+                        <span className="strand">{item.results.join(', ')}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )
           })}
