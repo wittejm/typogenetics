@@ -137,6 +137,15 @@ export default function SoupPage() {
 
   return (
     <div className="soup-page">
+      <div className="soup-intro">
+        <p>
+          Open question: What happens when strands are operating on strands other than themselves? What happens if this happens many times, at scale? Are there robust patterns of strand production? Interesting population dynamics? Who Knows!
+        </p>
+        <p>
+          Note: This app is presently just weird and confusing. I'm still working on making some sense of it.
+        </p>
+      </div>
+
       <div className="soup-controls">
         {workerState === 'idle' && (
           <button className="soup-toggle" onClick={handleStart}>Start</button>

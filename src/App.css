@@ -43,8 +43,9 @@ h2 {
 }
 
 .nav-link {
-  font-size: 0.9rem;
-  color: #999;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #666;
   text-decoration: none;
   padding-bottom: 0.2rem;
   border-bottom: 2px solid transparent;
@@ -636,6 +637,17 @@ h2 {
   max-width: 700px;
 }
 
+.soup-intro {
+  margin-bottom: 1.5rem;
+}
+
+.soup-intro p {
+  font-size: 0.95rem;
+  color: rgba(0, 0, 0, 0.7);
+  margin: 0 0 0.75rem;
+  line-height: 1.6;
+}
+
 .soup-controls {
   display: flex;
   align-items: center;
@@ -937,8 +949,20 @@ h2 {
 .landing-page a {
   color: #0077cc;
   text-decoration: none;
+  font-weight: 600;
 }
 
 .landing-page a:hover {
   text-decoration: underline;
+}
+
+.landing-braid {
+  display: flex;
+  justify-content: center;
+  margin-top: 2.5rem;
+}
+
+.landing-braid img {
+  max-width: 320px;
+  height: auto;
 }
