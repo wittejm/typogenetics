@@ -15,6 +15,9 @@ export default function Layout() {
           <NavLink to="/soup" className={({ isActive }) => 'nav-link' + (isActive ? ' nav-link-active' : '')}>
             Soup
           </NavLink>
+          <a href="https://github.com/wittejm/typogenetics" className="nav-link nav-link-light" target="_blank" rel="noopener noreferrer">
+            Github
+          </a>
         </nav>
       </header>
       <Outlet />

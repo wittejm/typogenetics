@@ -61,6 +61,10 @@ h2 {
   border-bottom-color: #1a2a38;
 }
 
+.nav-link-light {
+  font-weight: 400;
+}
+
 /* Two-panel layout */
 .two-panel {
   display: grid;
