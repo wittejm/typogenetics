@@ -152,14 +152,80 @@ Phase 4: Trace Interesting Cases
   This is where findings become explainable, not just statistical.
 
 
+DIRECTORY STRUCTURE
+-------------------
+
+  quest/                    Python scripts for visualization & analysis
+  quest/venv/               Python venv (gitignored)
+  data/quest_findings/      Raw simulation output (JSON, CSVs — gitignored)
+  QUEST_FINDINGS.txt        Running log of findings, written as discovered
+
+The simulation scripts (TypeScript) live in quest/ alongside the Python.
+The model code lives in src/model/* and is imported by the simulation scripts.
+
+QUEST_FINDINGS.txt is the human-readable output of this work. Write to it
+incrementally AS YOU GO — not batched at the end. Rules:
+
+  - Each finding gets a PT timestamp from `TZ=America/Los_Angeles date`
+  - Write the finding to the file THE MOMENT you have it, not later
+  - Log the session start time, progress timestamps, and end time
+  - Do NOT write multiple findings with the same timestamp — that means
+    you batched them. Each timestamp must reflect when that finding was
+    actually written.
+  - Timestamps let Jordan see real-time progress and when a session
+    ran out of context.
+
+This is the document Jordan reads.
+
+
 TOOLS AND SETUP
 ---------------
 
-- TypeScript simulation: src/model/* already exists, script imports directly
-- Python visualization: venv with matplotlib, networkx, numpy
+- TypeScript simulation: src/model/* already exists, scripts import directly
+- Run TS scripts via: npx tsx quest/sim_whatever.ts
+- Python visualization: quest/venv with matplotlib, networkx, numpy
+  Setup (two SEPARATE commands, never chain with &&):
+    python3 -m venv quest/venv
+    /Users/jordan/Dropbox/typogenetics/quest/venv/bin/python3 -m ensurepip
+    /Users/jordan/Dropbox/typogenetics/quest/venv/bin/python3 -m pip install matplotlib networkx numpy
+  Run scripts via:
+    /Users/jordan/Dropbox/typogenetics/quest/venv/bin/python3 quest/whatever.py
+  NOTE: Always use absolute paths for venv python. These are the tested,
+  auto-approved forms. Do NOT use relative paths or glob-style shortcuts.
 - Image inspection: Claude reads rendered PNGs directly
 - Iteration: each cycle is ~2 min (run sim + render + look + think)
-- Output directory: analysis/ at project root
+- Raw data output: data/quest_findings/
+- Findings log: QUEST_FINDINGS.txt at project root
+
+
+HOW TO START (for a fresh Claude session)
+------------------------------------------
+
+  1. Read this document and QUEST_FINDINGS.txt (if it exists)
+  2. Read src/model/types.ts, src/model/execution.ts, src/model/ribosome.ts,
+     src/model/collect.ts to understand the engine
+  3. Check what already exists in quest/ and data/quest_findings/
+  4. VERIFY AUTO-APPROVALS before doing any work. Read the project settings
+     at .claude/settings.local.json and confirm that all commands you plan
+     to use are covered by the allow list. The goal is to run the entire
+     quest unattended — Jordan should be able to walk away.
+
+     Commands the quest uses (and their approval patterns):
+       npx tsx quest/*.ts                    → Bash(npx tsx:*)
+       python3 -m venv quest/venv            → Bash(python3:*)
+       quest/venv/bin/pip install ...        → Bash(*/venv/bin/pip install:*)
+       quest/venv/bin/python3 quest/*.py     → Bash(*/venv/bin/python3:*)
+       mkdir -p ...                          → Bash(mkdir:*)
+       git ...                               → Bash(git:*)
+
+     IMPORTANT RULES TO AVOID GETTING STUCK:
+       - NEVER chain commands with && or ; — each command must be a
+         separate Bash call so it matches its approval pattern individually
+       - If a command gets rejected, do NOT retry it. Find an alternative
+         form that matches an approved pattern, or stop and explain.
+
+  5. Pick up where the last session left off, or start Phase 1 if nothing exists
+  6. Write findings to QUEST_FINDINGS.txt as you go (with timestamps)
 
 
 WHAT SUCCESS LOOKS LIKE
@@ -180,3 +246,39 @@ configuration I tried. Cross-strand typogenetics doesn't produce ecological
 structure. Here's the evidence, and here's a hypothesis for why."
 
 All three are findings worth sharing.
+
+
+THE NO-OP PROBLEM
+-----------------
+
+In a naive random×random soup, most steps are no-ops:
+
+  1. Source strand encodes no enzymes (too short, no valid duplets)
+  2. Enzyme's preferred binding base absent from target
+  3. Enzyme binds but operations leave target unchanged
+
+Estimated 80-90% of naive steps produce nothing. This matters because
+interesting structures need density of real interactions to emerge.
+
+Solution: Gillespie-style rejection-free sampling. Pre-classify source strands
+(do they encode enzymes? what binding preferences?), then weight source and
+target selection toward pairs that will actually interact. Track effective time
+so that "a pool clogged with junk evolves slower" remains a real, measurable
+phenomenon without burning compute on it. Skip the chaff, preserve the dynamics.
+
+
+WHERE TYPOGENETICS SITS
+-----------------------
+
+Kauffman's autocatalytic sets used random catalytic assignments — no structure-
+function relationship. His result is purely statistical: enough diversity
+guarantees closure. Fontana's AlChemy used lambda calculus — Turing-complete,
+deterministic structure-function map. He found self-maintaining organizations,
+but the system is too expressive to easily trace WHY.
+
+Typogenetics is the middle case. The structure-function map is deterministic
+and non-trivial (duplets → aminos → enzyme behavior → folding → binding
+preference), but sub-Turing. When a catalytic relationship exists, you can
+trace the enzyme operation step by step and understand the mechanism. This
+traceability is the payoff of staying in this system: findings are explainable,
+not just statistical.

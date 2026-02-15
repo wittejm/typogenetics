@@ -99,3 +99,24 @@ What makes it land:
 - **A finding.** "There are exactly N survivors of length 8 or less, and they all share this structural property." Or "pair bonds don't exist below length 12, here's why." Or "the shortest self-replicator is X, and here's how it works." The search finds the needles; the UI explains why they're needles.
 - **A visualization of the interesting cases.** Clicking a survivor in the search results and watching it replicate itself, step by step. That's the moment someone goes "oh, cool." (This is now wired up — search results play the step-through animation in a side panel.)
 - **A paragraph.** The framing that makes someone care. Hofstadter's original question — can a string encode the machinery to reproduce itself? — and then an empirical answer.
+
+## A few directions worth thinking about:                              
+                                                            
+  Filter the noise from what we have. Most of the cycles we just found are trivial length-shifts. A simple filter — require that cycle members differ in base     
+  composition, not just length (e.g., edit distance > just an insertion/deletion) — would reveal whether any structurally interesting cycles exist underneath.
+                                                                                                                                                                  
+  Cross-catalysis instead of self-operation. Everything so far is runOnSelf — strand A's enzymes act on A. The conceptually interesting thing is A's enzymes      
+  acting on B. You could search for pairs (A, B) where A operating on B produces something that closes a loop. Computationally harder (N² pairs) but you could
+  restrict to strands that produce enzymes and sample targets.
+
+  Closed sets from a single strand. Take a strand, run it on itself, collect all products. Then run each product on itself, collect their products. Iterate. Does
+  the set stabilize? A strand whose production cloud reaches a fixed point is an autocatalytic set seeded by one strand.
+
+  Neutral networks. For known self-replicators, check all single-base mutations. How many neighbors are also self-replicators? If there are connected clusters of
+  self-replicators in sequence space, that's biologically meaningful — it means self-replication is robust to mutation, not a fragile coincidence.
+
+  Enzyme functional fingerprinting. Classify strands not by what they produce but by what their enzymes do — copy mode vs not, number of cuts, insert/delete
+  balance. Then look for complementary enzyme pairs: "A encodes a copier, B encodes a cutter, together they do something neither does alone."
+
+  Production graph topology. For all strands of a given length, the runOnSelf results define a directed graph. Look at its structure — strongly connected
+  components, hub nodes, degree distribution. Is it random-looking or does it have non-trivial topology?

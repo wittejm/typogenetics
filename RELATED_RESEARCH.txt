@@ -1,0 +1,118 @@
+Related Research: Mutual Pairs and Hypercycles in Typogenetics
+=============================================================
+
+The concept of mutual pairs -- two strands that produce each other -- is
+well-established in the (admittedly niche) typogenetics literature, where
+the standard term is "hypercycle." A 2-hypercycle is exactly what this
+project calls a "pair bond" or "mutual pair": strand A produces B, and B
+produces A.
+
+The term "hypercycle" comes from Eigen & Schuster's origin-of-life theory
+(1970s), which Hofstadter was certainly aware of when designing
+typogenetics. Mutual reproduction is arguably *the* interesting question
+once you get past self-replication.
+
+
+Primary Literature
+------------------
+
+1. Kvasnička, V. & Pospíchal, J. (2001). "Autoreplicators and Hypercycles
+   in Typogenetics." Journal of Molecular Structure (THEOCHEM).
+   https://www.sciencedirect.com/science/article/abs/pii/S016612800100464X
+
+   The foundational paper. Models autoreplicating molecules and systems of
+   mutually replicating molecules (hypercycles) using Hofstadter's
+   typogenetics. Key finding: a 2-molecule hypercycle (mutual pair) can be
+   found "without extreme difficulties," but hypercycles of more than 4
+   autoreplicators are "nearly impossible" to construct simultaneously.
+   They used evolutionary algorithms (genetic search) rather than
+   exhaustive enumeration.
+
+2. Kvasnička, V. & Pospíchal, J. (2002). "A Study of Replicators and
+   Hypercycles by Typogenetics." In: Artificial Life Models in Software.
+   Springer.
+   https://link.springer.com/chapter/10.1007/3-540-44811-X_4
+
+   Conference chapter expanding on the 2001 paper. Demonstrates that
+   larger hypercycles can be constructed incrementally -- optimize a
+   2-cycle first, then expand by adding new molecules into the existing
+   cycle. This sequential approach substantially reduces combinatorial
+   complexity compared to simultaneous optimization.
+
+3. Kvasnička, V. & Pospíchal, J. (2014). "A Study of Replicators and
+   Hypercycles by Hofstadter's Typogenetics." International Journal of
+   Signs and Semiotic Systems, 3(1). IGI Global.
+   https://www.igi-global.com/article/a-study-of-replicators-and-hypercycles-by-hofstadters-typogenetics/104640
+
+   Later, more comprehensive treatment of the same material.
+
+4. Kvasnička, V. & Pospíchal, J. (2005). "Extensions and Variations on
+   Construction of Autoreplicators in Typogenetics." Springer.
+   https://link.springer.com/chapter/10.1007/11553090_69
+
+   Further extensions to the autoreplicator construction methods.
+
+5. Gwak, K.-W. & Wee, I.-S. (2007). "Construction of Hypercycles in
+   Typogenetics with Evolutionary Algorithms." Springer.
+   https://link.springer.com/chapter/10.1007/978-3-540-74913-4_106
+
+   Independent group building on Kvasnička & Pospíchal's work, also
+   using evolutionary algorithms to construct hypercycles.
+
+
+Implementations
+---------------
+
+- kortschak/typo: Go implementation of typogenetics.
+  https://github.com/kortschak/typo
+
+- mkpankov/typogenetics: Rust implementation.
+  https://github.com/mkpankov/typogenetics
+
+
+Terminology Mapping
+-------------------
+
+  This project               Literature
+  ─────────────────────────  ──────────────────────────
+  pairBond / mutual pair     2-hypercycle
+  survivor (self-replicator) Autoreplicator
+  production graph with      Hypercyclic network
+    mutual edges
+
+
+Notes
+-----
+
+The existing literature relies on evolutionary algorithms (guided search)
+to find hypercycles. This project's headless search takes the brute-force
+exhaustive approach instead, enumerating all strands up to a given length.
+The tradeoffs are obvious: exhaustive search is complete but slow (4^N
+growth); evolutionary search is fast but may miss solutions.
+
+Crucially, Kvasnička & Pospíchal used a SIMPLIFIED typogenetics that
+removes insert and delete operations, keeping strand lengths fixed through
+replication. This is a fundamentally different system than Hofstadter's
+full rules (which this project implements). Their finding that
+2-hypercycles can be found "without extreme difficulty" applies to this
+constrained variant where mutual production is much more achievable --
+when strands can't change length, the output space is far smaller and
+a strand is much more likely to land back on its partner.
+
+This project's exhaustive search has completed through all strands of
+length 1-15 (over 1.4 billion strands) under full Hofstadter rules and
+found ZERO pair bonds. The contrast with the literature's optimism is
+striking and almost certainly explained by the insert/delete difference.
+
+Note also that this project's pairBond check (in classify.ts) is narrower
+than a general 2-hypercycle: it only tests whether a strand and its
+reverse complement mutually produce each other, not arbitrary A ↔ B pairs.
+The soup worker's mutual pair detection (in soup/worker.ts) does check
+for arbitrary mutual pairs in the population, which is the more general
+case.
+
+Specific strand lengths from the literature are unknown -- the details
+are behind paywalls. They used evolutionary algorithms on longer strands
+than brute-force would reach, and Gwak & Wee (2007) mention
+"experimenting with enzymes of different lengths," suggesting they
+parameterized strand length, but no numbers appear in the abstracts.

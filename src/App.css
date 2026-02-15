@@ -16,32 +16,48 @@ h2 {
   margin-bottom: 1.5rem;
 }
 
-/* Nav */
-.app-nav {
+/* Header */
+.app-header {
   display: flex;
-  gap: 0.25rem;
+  align-items: baseline;
+  justify-content: space-between;
   margin-bottom: 1.5rem;
 }
 
+.app-title {
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: inherit;
+  text-decoration: none;
+  transition: opacity 0.15s;
+}
+
+.app-title:hover {
+  opacity: 0.8;
+}
+
+/* Nav */
+.app-nav {
+  display: flex;
+  gap: 1.5rem;
+}
+
 .nav-link {
-  font-size: 0.85rem;
-  padding: 0.3rem 0.7rem;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 4px;
+  font-size: 0.9rem;
   color: #888;
   text-decoration: none;
-  transition: border-color 0.15s, color 0.15s, background 0.15s;
+  padding-bottom: 0.2rem;
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
 }
 
 .nav-link:hover {
-  border-color: rgba(255, 255, 255, 0.3);
   color: #ccc;
 }
 
 .nav-link-active {
-  border-color: rgba(255, 255, 255, 0.4);
   color: #fff;
-  background: rgba(255, 255, 255, 0.08);
+  border-bottom-color: #fff;
 }
 
 /* Two-panel layout */
@@ -427,19 +443,16 @@ h2 {
 /* ── Light mode ─────────────────────────────────────── */
 @media (prefers-color-scheme: light) {
   .nav-link {
-    border-color: rgba(0, 0, 0, 0.12);
     color: #999;
   }
 
   .nav-link:hover {
-    border-color: rgba(0, 0, 0, 0.3);
     color: #333;
   }
 
   .nav-link-active {
-    border-color: rgba(0, 0, 0, 0.35);
     color: #000;
-    background: rgba(0, 0, 0, 0.06);
+    border-bottom-color: #000;
   }
 
   .speed-btn {

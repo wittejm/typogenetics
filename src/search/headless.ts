@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { spawn } from 'node:child_process'
 import { createInterface } from 'node:readline'
 import { availableParallelism } from 'node:os'
-import { runOnSelf, flattenOps, categorize, generateStrands } from './classify.ts'
+import { runOnSelf, flattenOps, categorize, generateStrands, findCycles } from './classify.ts'
 import type { Bucket } from './classify.ts'
 
 const DATA_DIR = join(import.meta.dirname, '../../data')
@@ -32,12 +32,17 @@ for (const b of INTERESTING_BUCKETS) {
   BUCKET_FILES[b] = join(DATA_DIR, `${b}.tsv`)
 }
 
+const HYPERCYCLES_FILE = join(DATA_DIR, 'hypercycles.tsv')
+
 // Ensure data/ exists and bucket files have headers
 mkdirSync(DATA_DIR, { recursive: true })
 for (const b of INTERESTING_BUCKETS) {
   if (!existsSync(BUCKET_FILES[b])) {
     writeFileSync(BUCKET_FILES[b], 'strand\tresults\n')
   }
+}
+if (!existsSync(HYPERCYCLES_FILE)) {
+  writeFileSync(HYPERCYCLES_FILE, 'strand\tcycle_length\tpath\n')
 }
 
 interface Progress {
@@ -74,6 +79,12 @@ function appendResult(bucket: Bucket, strand: string, results: string[]) {
   }
 }
 
+function appendCycle(strand: string, path: string[]) {
+  // cycle_length = number of distinct strands in the cycle (path length minus 1, since last == first)
+  const cycleLength = path.length - 1
+  appendFileSync(HYPERCYCLES_FILE, `${strand}\t${cycleLength}\t${path.join(',')}\n`)
+}
+
 /** Spawn a single shard worker for the given range. Runs at lowered priority via nice. */
 function runChunk(
   length: number, startIndex: number, endIndex: number,
@@ -88,6 +99,9 @@ function runChunk(
     rl.on('line', (line) => {
       if (line.startsWith('PROGRESS\t')) {
         onProgress?.(parseInt(line.split('\t')[1], 10))
+      } else if (line.startsWith('CYCLE\t')) {
+        const [, strand, pathStr] = line.split('\t')
+        appendCycle(strand, pathStr.split(','))
       } else {
         const [bucket, strand, results] = line.split('\t')
         appendResult(bucket as Bucket, strand, results.split(','))
@@ -239,6 +253,7 @@ function runLengthSequential(length: number, startIndex: number) {
   const lengthStart = Date.now()
   let lastReport = lengthStart
   let count = 0
+  const cycleCache = new Map<string, string[]>()
   for (const strand of generateStrands(length)) {
     if (count < startIndex) {
       count++
@@ -254,6 +269,11 @@ function runLengthSequential(length: number, startIndex: number) {
         if (INTERESTING_BUCKETS.includes(bucket)) {
           appendResult(bucket, strand, unique)
         }
+      }
+
+      const cycles = findCycles(strand, 4, cycleCache)
+      for (const cycle of cycles) {
+        appendCycle(strand, cycle.path)
       }
     }
 

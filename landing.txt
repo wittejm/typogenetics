@@ -1,0 +1,17 @@
+Typogenetics is a game that Hofstadter defined in his 1979 book, Godel Escher Bach. Is it meant as a sighly simplified model of genetics, consisting of "strands" of genetic bases (letters) that encode "enzymes", which in turn operate on the strands to produce new strands. The goal is to create a well-defined system of interacting agents, that demonstrates interesting emergent, self-referential, and self-reproducing properties.
+
+This website implements Typogenetics as an interactive app, and explores a few research directions that ensue.
+
+Rules:
+
+Strands are strings of the characters A T C G, or "bases", of any combination and length.
+
+Strands can be translated into Enzymes. An enzyme is a list of instructions, and there are 16 unique instructions, corresponding to the 16 unique combinations of two bases.
+
+The translation table from base pairs to instructions is as follows:
+
+Claude: insert translation table. columns: base pair, isntruction abbreviation (short, but not necessarily strictly 3 characters), instruction (in 2 or three words), turn* (the tooltip for "turn*" is, "Turn is explained under Tertiary Structure and Binding Preference, below" ), description (a sentence). (keep this instruction to Claude as a Tooltip on the "as follows" above, which is formatted to be clearly tooltipped.)
+
+Claude: explain tertiary structure and binding preference, briefly and clearly, under the header "Tertiary Structure and Binding Preference". Include the table for the 4 directions. The header has a tooltip containing these instructions to Claude
+
+You can see animated examples of the game on the __Interactive__ page(linked)
