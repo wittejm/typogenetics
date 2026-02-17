@@ -79,6 +79,7 @@ h2 {
 .strand-pool-header {
   display: flex;
   align-items: baseline;
+  justify-content: space-between;
   gap: 0.75rem;
 }
 
@@ -90,7 +91,12 @@ h2 {
   display: flex;
   align-items: center;
   gap: 0.25rem;
-  margin-bottom: 1.5rem;
+}
+
+.speed-label {
+  font-size: 0.75rem;
+  color: #888;
+  margin-right: 0.25rem;
 }
 
 .speed-btn {
@@ -176,13 +182,93 @@ h2 {
   border-color: transparent;
 }
 
-.strand-item-create {
+/* ── Strand create section ──────────────────────────── */
+.strand-create-section {
+  margin-bottom: 0.25rem;
+}
+
+.strand-create-heading {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #888;
+  margin: 0 0 0.5rem;
+}
+
+.strand-create-row {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  cursor: default;
-  background: transparent;
+}
+
+.strand-create-binding {
+  display: flex;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.strand-create-enzymes {
+  margin-top: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.strand-create-divider {
   border: none;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  margin: 0.75rem 0;
+}
+
+.duplet-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 0.35rem;
+}
+
+.duplet-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+  padding: 0.3rem 0.15rem;
+  border: 1.5px solid rgba(0, 0, 0, 0.15);
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.02);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.duplet-btn:hover {
+  border-color: rgba(0, 0, 0, 0.4);
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.duplet-btn:active {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.duplet-btn-label {
+  font-family: system-ui, sans-serif;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #444;
+  line-height: 1.2;
+}
+
+.duplet-btn-code {
+  font-family: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, Consolas, monospace;
+  font-size: 0.55rem;
+  color: #aaa;
+  letter-spacing: 0.05em;
+  line-height: 1;
+}
+
+.strand-create-section-divider {
+  border: none;
+  border-top: 2px solid rgba(0, 0, 0, 0.1);
+  margin: 0.75rem 0;
 }
 
 .strand-create-input {

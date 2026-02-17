@@ -1,9 +1,13 @@
 import { useState, useRef, useCallback } from 'react'
 import { translate } from '../model/ribosome'
 import { initialStrands } from '../model/strand'
+import { DUPLET_MAP } from '../model/types'
+import { aminoLabel } from '../labels'
 import StrandText from '../StrandText'
 import EnzymeDisplay from '../EnzymeDisplay'
 import ProcessingWindow, { type ProcessingData } from '../ProcessingWindow'
+
+const DUPLETS = [...DUPLET_MAP.entries()] as const
 
 const SPEEDS = [1, 2, 5, 10, 50] as const
 
@@ -99,9 +103,62 @@ export default function InteractivePage() {
   return (
     <div className="two-panel">
       <div className="strand-panel">
+        {(() => {
+          const previewEnzymes = newStrand.length >= 2 ? translate(newStrand) : []
+          return (
+            <div className="strand-create-section">
+              <h3 className="strand-create-heading">Create</h3>
+              <div className="strand-create-row">
+                <input
+                  className="strand-create-input"
+                  type="text"
+                  value={newStrand}
+                  onChange={e => setNewStrand(e.target.value.replace(/[^acgtACGT]/g, '').toUpperCase())}
+                  placeholder="ACGT..."
+                />
+                {previewEnzymes.length > 0 && (
+                  <span className="strand-create-binding">
+                    {previewEnzymes.map((enz, i) => (
+                      <span key={i} className="bind-pref">binds {enz.bindingPref}</span>
+                    ))}
+                  </span>
+                )}
+                <button
+                  className="strand-create-btn"
+                  disabled={newStrand.length === 0}
+                  onClick={() => { setStrands(prev => [newStrand, ...prev]); setNewStrand('') }}
+                >Create</button>
+              </div>
+              {previewEnzymes.length > 0 && (
+                <div className="strand-create-enzymes">
+                  {previewEnzymes.map((enzyme, ei) => (
+                    <EnzymeDisplay key={ei} enzyme={enzyme} />
+                  ))}
+                </div>
+              )}
+              <hr className="strand-create-divider" />
+              <div className="duplet-grid">
+                {DUPLETS.map(([duplet, [amino]]) => (
+                  <button
+                    key={duplet}
+                    className="duplet-btn"
+                    onClick={() => setNewStrand(prev => prev + duplet)}
+                  >
+                    <span className="duplet-btn-label">
+                      {amino === 'pun' ? 'pun' : aminoLabel[amino]}
+                    </span>
+                    <span className="duplet-btn-code">{duplet}</span>
+                  </button>
+                ))}
+              </div>
+              <hr className="strand-create-section-divider" />
+            </div>
+          )
+        })()}
         <div className="strand-pool-header">
           <h2>Strand Pool</h2>
           <div className="speed-control">
+            <span className="speed-label">Animation speed</span>
             <button
               className="speed-btn"
               disabled={speedIndex === 0}
@@ -116,20 +173,6 @@ export default function InteractivePage() {
           </div>
         </div>
         <ol className="strand-list" style={{ '--exit-duration': `${0.5 / speed}s` } as React.CSSProperties}>
-          <li className="strand-item strand-item-create">
-            <input
-              className="strand-create-input"
-              type="text"
-              value={newStrand}
-              onChange={e => setNewStrand(e.target.value.replace(/[^acgtACGT]/g, '').toUpperCase())}
-              placeholder="ACGT..."
-            />
-            <button
-              className="strand-create-btn"
-              disabled={newStrand.length === 0}
-              onClick={() => { setStrands(prev => [newStrand, ...prev]); setNewStrand('') }}
-            >Create</button>
-          </li>
           {strands.map((strand, i) => {
             const enzymes = translate(strand)
             const isSource = selected !== null && selected.si === i
