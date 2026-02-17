@@ -47,15 +47,7 @@ This departs from GEB's synchronous generational model (all enzymes operate on t
 
 The interesting questions become ecological: does the pool reach a fixed point? Do certain strands act as keystone species? What starting pools produce the richest dynamics?
 
-## GitHub Pages Deployment
-
-The repo includes a GitHub Actions workflow (`.github/workflows/deploy.yml`) that builds and deploys to GitHub Pages on every push to `main`. To enable it:
-
-1. Go to your repo's **Settings > Pages**
-2. Under **Build and deployment > Source**, select **GitHub Actions**
-3. Push to `main` — the workflow will run automatically
-
-The site will be live at `https://wittejm.github.io/typogenetics/`.
+The site is live at `https://wittejm.github.io/typogenetics/`.
 
 ## Dev
 

@@ -176,6 +176,57 @@ h2 {
   border-color: transparent;
 }
 
+.strand-item-create {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: default;
+  background: transparent;
+  border: none;
+}
+
+.strand-create-input {
+  flex: 1;
+  font-family: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, Consolas, monospace;
+  font-size: 1.1rem;
+  letter-spacing: 0.15em;
+  background: #fff;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  color: inherit;
+  padding: 0.3rem 0.5rem;
+}
+
+.strand-create-input:focus {
+  border-color: #999;
+  outline: none;
+}
+
+.strand-create-input::placeholder {
+  color: rgba(0, 0, 0, 0.25);
+}
+
+.strand-create-btn {
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.25rem 0.75rem;
+  border: 1.5px solid rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.04);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.strand-create-btn:hover:not(:disabled) {
+  border-color: rgba(0, 0, 0, 0.4);
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.strand-create-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
 /* Strand text (used in both strand list and processing panel results) */
 .strand {
   font-family: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, Consolas, monospace;

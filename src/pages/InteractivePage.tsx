@@ -20,6 +20,7 @@ export default function InteractivePage() {
   const [pulsingTarget, setPulsingTarget] = useState<number | null>(null)
   const [processingData, setProcessingData] = useState<ProcessingData | null>(null)
   const pulseTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [newStrand, setNewStrand] = useState('')
 
   const selectedBindingPref = (() => {
     if (!selected) return null
@@ -115,6 +116,20 @@ export default function InteractivePage() {
           </div>
         </div>
         <ol className="strand-list" style={{ '--exit-duration': `${0.5 / speed}s` } as React.CSSProperties}>
+          <li className="strand-item strand-item-create">
+            <input
+              className="strand-create-input"
+              type="text"
+              value={newStrand}
+              onChange={e => setNewStrand(e.target.value.replace(/[^acgtACGT]/g, '').toUpperCase())}
+              placeholder="ACGT..."
+            />
+            <button
+              className="strand-create-btn"
+              disabled={newStrand.length === 0}
+              onClick={() => { setStrands(prev => [newStrand, ...prev]); setNewStrand('') }}
+            >Create</button>
+          </li>
           {strands.map((strand, i) => {
             const enzymes = translate(strand)
             const isSource = selected !== null && selected.si === i
