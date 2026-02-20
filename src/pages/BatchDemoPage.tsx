@@ -17,7 +17,6 @@ import {
 } from "../rnn_deterministic/constants";
 
 const B = 16; // 4×4 grid
-const COLS = 4;
 
 type CellInfo = {
   enzyme: Enzyme;
