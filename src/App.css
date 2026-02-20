@@ -1107,3 +1107,159 @@ h2 {
   max-width: 320px;
   height: auto;
 }
+
+/* ── Batch demo page ────────────────────────────── */
+.batch-demo-page {
+  max-width: 1100px;
+}
+
+.batch-demo-subtitle {
+  font-size: 0.9rem;
+  color: #777;
+  margin: -1rem 0 1.5rem;
+}
+
+.batch-demo-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.batch-demo-btn {
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 0.3rem 1rem;
+  border: 1.5px solid rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.04);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.batch-demo-btn:hover:not(:disabled) {
+  border-color: rgba(0, 0, 0, 0.4);
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.batch-demo-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.batch-demo-step {
+  font-size: 0.85rem;
+  color: #666;
+  margin-left: 0.5rem;
+}
+
+.batch-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.75rem;
+}
+
+.batch-cell {
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 6px;
+  padding: 0.5rem 0.6rem;
+  background: rgba(0, 0, 0, 0.015);
+  min-height: 5rem;
+  transition: opacity 0.3s;
+  overflow: hidden;
+}
+
+.batch-cell-done {
+  opacity: 0.55;
+}
+
+.batch-cell-enzyme {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.4rem;
+}
+
+.batch-cell-enzyme .amino-badge {
+  font-size: 0.6rem;
+  padding: 0.1rem 0.3rem;
+}
+
+.batch-cell-enzyme .bind-pref {
+  font-size: 0.6rem;
+}
+
+.batch-cell-strand {
+  font-family: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, Consolas, monospace;
+  font-size: 0.85rem;
+  letter-spacing: 0.1em;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0;
+  min-height: 1.3em;
+}
+
+.batch-base {
+  display: inline-block;
+  min-width: 0.7em;
+  text-align: center;
+  border-radius: 2px;
+  transition: color 0.2s, background 0.2s;
+}
+
+.batch-base-cursor {
+  background: rgba(0, 119, 204, 0.25);
+  box-shadow: 0 0 4px rgba(0, 119, 204, 0.3);
+  color: #000;
+}
+
+.batch-copy-badge {
+  font-family: system-ui, sans-serif;
+  font-size: 0.5rem;
+  font-weight: 700;
+  padding: 0 0.25rem;
+  margin-left: 0.3rem;
+  border: 1px solid #0077cc;
+  border-radius: 3px;
+  color: #0077cc;
+  letter-spacing: 0.05em;
+}
+
+.batch-cell-secondary {
+  font-family: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, Consolas, monospace;
+  font-size: 0.85rem;
+  letter-spacing: 0.1em;
+  color: #b44;
+  border-top: 1px dashed rgba(0, 0, 0, 0.1);
+  padding-top: 0.15rem;
+  margin-top: 0.15rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+}
+
+.batch-base-secondary {
+  color: #b44;
+}
+
+.batch-cell-results {
+  margin-top: 0.4rem;
+  padding-top: 0.3rem;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.batch-result-strand {
+  font-family: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, Consolas, monospace;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  padding: 0.1rem 0.35rem;
+  background: rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 3px;
+  color: #444;
+}

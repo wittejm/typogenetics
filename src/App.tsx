@@ -5,6 +5,7 @@ import LandingPage from './pages/LandingPage'
 import InteractivePage from './pages/InteractivePage'
 import SearchPage from './pages/SearchPage'
 import SoupPage from './pages/SoupPage'
+import BatchDemoPage from './pages/BatchDemoPage'
 
 export default function App() {
   return (
@@ -14,6 +15,7 @@ export default function App() {
         <Route path="interactive" element={<InteractivePage />} />
         <Route path="search" element={<SearchPage />} />
         <Route path="soup" element={<SoupPage />} />
+        <Route path="batch" element={<BatchDemoPage />} />
       </Route>
     </Routes>
   )

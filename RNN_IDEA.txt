@@ -1,0 +1,344 @@
+TENSOR-ACCELERATED TYPOGENETICS: EXACT MATRIX EXECUTION
+=========================================================
+
+
+IDEA 1 (DISCARDED): NEURAL APPROXIMATION
+------------------------------------------
+
+Train an RNN/seq2seq to approximate f(source, target) → output strands.
+GPU-batchable but APPROXIMATE. Typogenetics is brittle — a single base
+change rewires an enzyme. Approximate outputs produce a fundamentally
+different dynamical system. The interesting emergent phenomena (auto-
+catalytic sets, self-replicators) may not survive the approximation.
+
+Still useful for gradient-guided SEARCH (differentiable proxy for "what
+does this strand do" → optimize input embeddings toward desired properties
+like self-replication, bypassing the 4^N combinatorial wall). But not a
+faithful soup accelerator.
+
+
+IDEA 2: EXACT CLOSED-FORM MATRIX EXECUTION
+--------------------------------------------
+
+The better idea: express the typogenetics state machine as EXACT tensor
+operations. No learning, no training data, no approximation. Just the
+same computation rewritten as batched matrix math.
+
+The execution of an enzyme on a strand is already recurrent:
+
+  state_0 = init(target_strand, binding_position)
+  state_{t+1} = apply(state_t, amino_t)      for t = 0..M-1
+  output = collect(state_M)
+
+This is an "RNN" where the transition function is HAND-CODED (not
+learned) and the "input sequence" is the enzyme's amino list. The key
+insight: apply() for every amino type can be expressed as compositions
+of element-wise ops, shifts, and prefix scans — all GPU-parallel.
+
+If we batch B executions, each recurrent step runs B strand operations
+simultaneously. The enzyme steps are sequential (must be — each depends
+on the last), but the parallelism is across the BATCH.
+
+
+STATE REPRESENTATION (for batch of B executions)
+--------------------------------------------------
+
+All strands padded to max length L. Bases one-hot encoded over 5 values
+{A=0, C=1, G=2, T=3, null=4}.
+
+  primary     : (B, L)     strand bases as integers 0-4
+  secondary   : (B, L)     complement strand, mostly null
+  cursor      : (B,)       integer cursor position
+  copyMode    : (B,)       boolean flag
+  onSecondary : (B,)       boolean flag
+  terminated  : (B,)       boolean flag
+  alive       : (B, L)     mask of non-deleted positions (for del/insert)
+
+Plus a fragment buffer for cut operations:
+  frag_buf    : (B, F, L)  up to F fragments per execution
+  frag_count  : (B,)       how many fragments so far
+
+
+EACH AMINO AS TENSOR OPS
+--------------------------
+
+All operations below apply element-wise across the batch dimension B.
+Pseudocode uses position-vector notation where `pos > cursor` means
+a boolean mask over the L positions.
+
+  ┌─────────────────────────────────────────────────────────┐
+  │ mvr / mvl                                               │
+  │                                                         │
+  │   new_cursor = cursor ± 1                               │
+  │   if copyMode and not onSecondary:                      │
+  │     secondary[new_cursor] = complement(primary[new_cursor]) │
+  │   cursor = new_cursor                                   │
+  │   terminated |= (new_cursor < 0 or new_cursor >= len)   │
+  │                                                         │
+  │   Ops: integer add, conditional scatter, compare.       │
+  │   All O(1) per batch element.                           │
+  └─────────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────┐
+  │ cop / off / swi                                         │
+  │                                                         │
+  │   cop: secondary[cursor] = complement(primary[cursor])  │
+  │        copyMode = true                                  │
+  │   off: copyMode = false                                 │
+  │   swi: onSecondary = !onSecondary                       │
+  │                                                         │
+  │   Ops: scalar set, conditional scatter. O(1).           │
+  └─────────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────┐
+  │ cut                                                     │
+  │                                                         │
+  │   right_part = primary where pos > cursor               │
+  │   copy right_part into frag_buf[frag_count]             │
+  │   zero out primary where pos > cursor                   │
+  │   update alive mask                                     │
+  │   frag_count += 1                                       │
+  │                                                         │
+  │   Ops: masked copy, masked zero. O(L) but parallel.     │
+  └─────────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────┐
+  │ del                                                     │
+  │                                                         │
+  │   Option A (shift): shift all elements after cursor     │
+  │     left by 1. primary[i] = primary[i+1] for i > cursor │
+  │   Option B (tombstone): mark position as deleted in     │
+  │     alive mask, adjust cursor logic to skip tombstones. │
+  │                                                         │
+  │   Option A is a masked scatter: O(L) but parallel.      │
+  │   Option B is O(1) but complicates later operations.    │
+  │   Recommend option A — simpler, L is small.             │
+  └─────────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────┐
+  │ ina / inc / ing / int                                   │
+  │                                                         │
+  │   Shift all elements after cursor right by 1.           │
+  │   Write new base at cursor + 1.                         │
+  │   Increment strand length.                              │
+  │                                                         │
+  │   Same masked scatter as del, reversed. O(L) parallel.  │
+  │   Pre-allocate L = strand_len + M (max possible growth).│
+  └─────────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────┐
+  │ rpy / rpu / lpy / lpu  (THE INTERESTING ONE)            │
+  │                                                         │
+  │ "Search right for purine" (rpu) as tensor ops:          │
+  │                                                         │
+  │   1. is_match[i] = (primary[i] is purine) for all i     │
+  │      → element-wise compare, O(L) parallel              │
+  │                                                         │
+  │   2. candidates[i] = is_match[i] AND (i > cursor)       │
+  │      → element-wise AND, O(L) parallel                  │
+  │                                                         │
+  │   3. found_pos = FIRST nonzero index in candidates      │
+  │      → parallel prefix scan (cumsum), then compare:     │
+  │        running = cumsum(candidates)                      │
+  │        first_hit[i] = candidates[i] AND (running[i]==1)  │
+  │        found_pos = argmax(first_hit)                     │
+  │      → O(log L) with parallel prefix, O(L) sequential   │
+  │                                                         │
+  │   4. If copyMode: write complement at ALL positions      │
+  │      between cursor+1 and found_pos (inclusive):         │
+  │        copy_mask[i] = (i > cursor) AND (i <= found_pos)  │
+  │        secondary[copy_mask] = complement(primary)        │
+  │      → masked scatter, O(L) parallel                     │
+  │                                                         │
+  │   5. If no match found (sum(candidates)==0):             │
+  │        copy everything right of cursor (copy_mask =      │
+  │        pos > cursor), set terminated = true              │
+  │                                                         │
+  │   6. cursor = found_pos                                  │
+  │                                                         │
+  │   Total: O(L) parallel per batch element.                │
+  │   The sequential while-loop in execution.ts becomes      │
+  │   a single parallel pass + prefix scan.                  │
+  └─────────────────────────────────────────────────────────┘
+
+
+AMINO DISPATCH (handling 15 different operation types)
+------------------------------------------------------
+
+At each recurrent step, different batch elements may execute different
+amino types. Two approaches:
+
+  A. COMPUTE ALL, SELECT ONE
+     Run all 15 operation kernels, producing 15 candidate next-states.
+     For each batch element, select the result matching its amino type.
+
+     Cost: 15x per step. But each operation is very cheap (small L),
+     and this avoids warp divergence on GPU. For L < 50 this is fine.
+
+  B. GROUP BY AMINO TYPE
+     Sort/partition the batch by current amino. Process each group
+     with the matching kernel. Reassemble.
+
+     Less wasted work but requires scatter/gather per step.
+     Better for large batches (B > 10K).
+
+  C. UNIFIED PARAMETERIZED KERNEL
+     Most aminos share structure. Express as:
+       direction = lookup[amino]        // +1, -1, or 0
+       search_pred = lookup[amino]      // purine, pyrimidine, or none
+       insert_base = lookup[amino]      // A/C/G/T or none
+       sets_copy = lookup[amino]        // true/false
+       does_cut = lookup[amino]         // true/false
+     Single kernel that branches on these parameters.
+
+     This is the cleanest approach. 5-6 conditional masks per step,
+     all branchless (multiply by 0/1 flags).
+
+
+COMPLEXITY COMPARISON
+----------------------
+
+Sequential JS (current):
+  Per soup operation: O(M × L)     M aminos, each potentially O(L) scan
+  One at a time.
+
+Batched tensor (proposed):
+  Per soup batch of B operations: O(M × L) parallel across B
+  Effectively: O(M × L / num_cores) wall-clock per batch
+
+  With B = 1000, GPU with 1000+ cores:
+    ~1000x throughput improvement for the execution step.
+
+  For typical soup values (L ≈ 20, M ≈ 10):
+    JS: ~20µs per operation → 50K ops/sec
+    GPU batch of 1000: ~50µs per batch → 20M ops/sec  (400x)
+
+  Even on CPU with WASM SIMD (128-bit, 4-way):
+    Process 4 executions per SIMD lane → ~200K ops/sec  (4x)
+
+
+WHAT THIS MEANS FOR THE SOUP
+------------------------------
+
+The soup loop becomes:
+
+  while running:
+    1. Sample B (source_idx, target_idx, enzyme_idx, bind_pos) tuples
+       from pool — purely CPU, fast with pre-computed binding tables
+
+    2. Pack into tensors:
+       - enzyme_aminos: (B, M_max) padded amino sequences
+       - target_strands: (B, L_max) padded target strands
+       - bind_positions: (B,) cursor start positions
+
+    3. BATCHED EXACT EXECUTION (GPU or WASM SIMD):
+       state = init(target_strands, bind_positions)
+       for t in 0..M_max:
+         amino_t = enzyme_aminos[:, t]        // (B,) current amino per element
+         state = apply(state, amino_t)        // exact tensor ops
+       results = collect(state)               // (B, variable) output strands
+
+    4. Update pool: remove consumed targets, add results.
+       Sequential, but O(B) simple array ops — not the bottleneck.
+
+    5. Post stats to UI.
+
+
+CHALLENGES
+-----------
+
+1. VARIABLE OUTPUT COUNT: Each execution can produce 0-N output strands
+   (from cut operations + primary/secondary separation). Need a
+   fixed-size output buffer. Max fragments per execution = M+2 (one
+   cut per amino + primary + secondary). Pre-allocate accordingly.
+
+2. INSERT GROWTH: Strands can grow up to L + M bases. Pre-allocate
+   L_max = max_strand_length + max_enzyme_length. For typical soup
+   strands (< 50 bases, < 25 aminos), L_max = 75 is plenty.
+
+3. RESULT COLLECTION: The secondary strand is read REVERSED (anti-
+   parallel), and only contiguous non-null runs become output strands.
+   Expressible as: reverse the secondary, find contiguous segments
+   via prefix scan on the null mask. Parallel, exact.
+
+4. TRANSLATION IS ALREADY CACHED: The soup caches translate() results.
+   No need to tensorize translation — it's not the bottleneck.
+
+5. WEBGPU VS WASM: WebGPU compute shaders can run this in-browser.
+   But kernel launch overhead may dominate for small B. Alternatively,
+   a WASM module with SIMD intrinsics avoids GPU overhead entirely
+   while still getting 4-8x parallelism per execution.
+
+   Recommendation: Start with WASM SIMD (simpler, no GPU API surface).
+   Graduate to WebGPU if B > 5000 is needed.
+
+
+CONCRETE IMPLEMENTATION PATH
+------------------------------
+
+Phase 1: WASM batch executor (1-2 days)
+  - Rust or C compiled to WASM with SIMD
+  - Fixed-size state arrays, no heap allocation
+  - Batch of B=256 executions per call
+  - Export: execute(enzymes, targets, bind_positions) → results
+  - Plug into soup worker.ts as drop-in replacement for runAll()
+
+Phase 2: Pre-computed binding tables (half day)
+  - When pool changes, maintain a Map<Base, Set<strand_index>>
+  - Sampling a valid (enzyme, target, position) triple is O(1)
+    instead of random-pick-and-hope
+  - Eliminates the ~50% wasted no-op attempts
+
+Phase 3: WebGPU compute shader (if needed)
+  - Port the WASM kernels to WGSL
+  - Batches of B=1000-10000
+  - Double-buffer: GPU executes batch N while CPU prepares batch N+1
+
+Expected combined speedup: 100-500x over current JS worker.
+At 20M ops/sec, a soup run that currently takes 10 minutes would
+take 1-6 seconds. This changes what's explorable.
+
+
+WHAT ABOUT THE GRADIENT SEARCH IDEA?
+--------------------------------------
+
+The exact tensor formulation is NOT differentiable (argmax in search
+operations, integer cursor positions, discrete base values). So it
+doesn't enable gradient-based strand search.
+
+But it doesn't need to. The 100-500x speedup lets us do BRUTE FORCE
+over much larger spaces. At 20M ops/sec:
+
+  - Exhaustive self-operation of all 4^20 ≈ 10^12 strands:
+    10^12 / 20M = 50,000 seconds ≈ 14 hours  (currently infeasible)
+
+  - Exhaustive pairwise for all strands up to length 14:
+    (4^14)^2 / 20M ≈ 3.6 × 10^9 seconds (still too big)
+
+  - But SOUP simulation for 10 billion ops:
+    10^10 / 20M = 500 seconds ≈ 8 minutes  (currently would take days)
+
+The speedup makes long soup runs practical, which is where the
+interesting emergent phenomena are most likely to appear.
+
+
+VERDICT
+--------
+
+The closed-form matrix approach is strictly better than neural
+approximation for the soup use case:
+
+  - EXACT: identical results to the JS implementation
+  - FAST: 100-500x via batched WASM SIMD or WebGPU
+  - NO TRAINING: implement once, works for all strands/enzymes
+  - COMPOSABLE: drop-in replacement for runAll() in the worker
+
+The "recurrent" framing is the key insight: the enzyme amino sequence
+IS the time axis. Each step is a hand-coded (not learned) state
+transition expressible as parallel tensor ops. The batch dimension
+provides the parallelism. The variable-length strand is handled by
+padding to a fixed max, same as how RNNs handle variable sequences.
+
+Neural approaches remain interesting only for the gradient-search
+use case (finding interesting long strands via continuous optimization).
+For faithful soup simulation, exact tensor execution wins.

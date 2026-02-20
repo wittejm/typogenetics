@@ -46,7 +46,55 @@ export function flattenOps(ops: string[][]): string[] {
   return all
 }
 
-export type Bucket = 'survivor' | 'complement' | 'survivorComplementSingle' | 'survivorComplementMulti' | 'pairBond' | 'novel'
+export type Bucket = 'survivor' | 'complement' | 'survivorComplementSingle' | 'survivorComplementMulti' | 'pairBond' | 'hypercycle2' | 'hypercycle2NonTrivial' | 'hypercycle3' | 'hypercycle4' | 'novel'
+
+export function levenshtein(a: string, b: string): number {
+  const m = a.length, n = b.length
+  const dp: number[] = Array.from({ length: n + 1 }, (_, i) => i)
+  for (let i = 1; i <= m; i++) {
+    let prev = dp[0]
+    dp[0] = i
+    for (let j = 1; j <= n; j++) {
+      const tmp = dp[j]
+      dp[j] = a[i - 1] === b[j - 1]
+        ? prev
+        : 1 + Math.min(prev, dp[j], dp[j - 1])
+      prev = tmp
+    }
+  }
+  return dp[n]
+}
+
+export function categorizeCycles(strand: string, cycles: Cycle[]): Bucket[] {
+  if (cycles.length === 0) return []
+
+  const buckets: Bucket[] = []
+  let minLength = Infinity
+  for (const c of cycles) {
+    const len = c.path.length - 1
+    if (len < minLength) minLength = len
+  }
+
+  if (minLength === 2) {
+    buckets.push('hypercycle2')
+    // Check if any 2-cycle's intermediate has Levenshtein distance > 1
+    for (const c of cycles) {
+      if (c.path.length - 1 === 2) {
+        const intermediate = c.path[1]
+        if (levenshtein(strand, intermediate) > 1) {
+          buckets.push('hypercycle2NonTrivial')
+          break
+        }
+      }
+    }
+  } else if (minLength === 3) {
+    buckets.push('hypercycle3')
+  } else if (minLength === 4) {
+    buckets.push('hypercycle4')
+  }
+
+  return buckets
+}
 
 export function categorize(strand: string, ops: string[][]): Bucket[] {
   const buckets: Bucket[] = []

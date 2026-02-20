@@ -1,4 +1,4 @@
-import { runOnSelf, flattenOps, categorize, generateStrands } from './classify.ts'
+import { runOnSelf, flattenOps, categorize, generateStrands, findCycles, categorizeCycles } from './classify.ts'
 import type { Bucket } from './classify.ts'
 
 type ResultItem = { strand: string; results: string[]; bucket: Bucket }
@@ -21,6 +21,7 @@ async function search() {
   while (running) {
     let batch: ResultItem[] = []
     let sinceYield = 0
+    const cycleCache = new Map<string, string[]>()
 
     for (const strand of generateStrands(length)) {
       if (!running) return
@@ -36,6 +37,23 @@ async function search() {
         const unique = [...new Set(flattenOps(ops))]
         for (const bucket of buckets) {
           batch.push({ strand, results: unique, bucket })
+        }
+
+        // Seed cycle cache and detect hypercycles
+        cycleCache.set(strand, unique)
+        const cycles = findCycles(strand, 4, cycleCache)
+        const cycleBuckets = categorizeCycles(strand, cycles)
+        for (const bucket of cycleBuckets) {
+          // Show the cycle path (excluding the repeated start) as results
+          const cycle = cycles.find(c => {
+            const len = c.path.length - 1
+            if (bucket === 'hypercycle2' || bucket === 'hypercycle2NonTrivial') return len === 2
+            if (bucket === 'hypercycle3') return len === 3
+            if (bucket === 'hypercycle4') return len === 4
+            return false
+          })
+          const results = cycle ? cycle.path.slice(1) : unique
+          batch.push({ strand, results, bucket })
         }
       }
 

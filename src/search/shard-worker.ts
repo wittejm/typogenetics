@@ -1,4 +1,4 @@
-import { runOnSelf, flattenOps, categorize, indexToStrand, findCycles } from './classify.ts'
+import { runOnSelf, flattenOps, categorize, indexToStrand, findCycles, categorizeCycles } from './classify.ts'
 import type { Bucket } from './classify.ts'
 
 const INTERESTING_BUCKETS: Bucket[] = [
@@ -6,6 +6,10 @@ const INTERESTING_BUCKETS: Bucket[] = [
   'survivorComplementSingle',
   'survivorComplementMulti',
   'pairBond',
+  'hypercycle2',
+  'hypercycle2NonTrivial',
+  'hypercycle3',
+  'hypercycle4',
 ]
 
 const PROGRESS_INTERVAL = 100_000
@@ -31,9 +35,21 @@ for (let i = startIndex; i < endIndex; i++) {
       }
     }
 
+    cycleCache.set(strand, unique)
     const cycles = findCycles(strand, 4, cycleCache)
-    for (const cycle of cycles) {
-      process.stdout.write(`CYCLE\t${strand}\t${cycle.path.join(',')}\n`)
+    const cycleBuckets = categorizeCycles(strand, cycles)
+    for (const bucket of cycleBuckets) {
+      if (INTERESTING_BUCKETS.includes(bucket)) {
+        const cycle = cycles.find(c => {
+          const len = c.path.length - 1
+          if (bucket === 'hypercycle2' || bucket === 'hypercycle2NonTrivial') return len === 2
+          if (bucket === 'hypercycle3') return len === 3
+          if (bucket === 'hypercycle4') return len === 4
+          return false
+        })
+        const results = cycle ? cycle.path.slice(1) : unique
+        process.stdout.write(`${bucket}\t${strand}\t${results.join(',')}\n`)
+      }
     }
   }
 }
