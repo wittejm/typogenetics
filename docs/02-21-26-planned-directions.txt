@@ -1,0 +1,11 @@
+2-21-26
+
+Showed project to Kent:
+* Needs more explanation with a few more animations
+* "Find the plant in the soup" -- can it generate an "interesting" structure.
+Asked Claude: 
+* It says just give an explanation to describe the findings so far.
+
+My vague ideas to sharpen:
+
+* Can our soup show regular dynamics (specific frequent)

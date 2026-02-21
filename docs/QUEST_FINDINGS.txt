@@ -1,0 +1,490 @@
+QUEST FINDINGS
+==============
+
+Running log of findings from the typogenetical combinatorial soup experiments.
+See CLAUDES_QUEST_IN_THE_TYPOGENETICAL_COMBINATORIAL_SOUP.txt for methodology.
+
+
+═══════════════════════════════════════════════════════════════════════════════
+2026-02-14 ~14:00 PT  SESSION 1 — First Experiments
+═══════════════════════════════════════════════════════════════════════════════
+
+
+FINDING 0: IDENTITY ARTIFACT IN PRODUCTION RECORDING
+-----------------------------------------------------
+2026-02-14 ~14:15 PT
+
+The first version of the simulation recorded ALL results from enzyme
+operations as "production edges" — including cases where the enzyme returned
+the substrate unchanged. This made the production graph look dramatically
+richer than it actually is.
+
+The worst offender: the `cop` amino (from duplet CG). When an enzyme is just
+[cop] (e.g., the strand "CG"), it activates copy mode at the binding position,
+writes one complement base to the secondary strand, and terminates. The primary
+strand comes back UNCHANGED. The secondary fragment is a single base, which
+gets filtered out by filterInert. So CG's enzyme is effectively a no-op.
+
+Before fix → After fix (identity-only edges excluded):
+  random200:  315 edges → 191 edges  (39% were identity)
+  random500:  596 edges → 425 edges  (29% were identity)
+  oldest200:  214 edges →   6 edges  (97% were identity!)
+  Cycles:     412 → 14 (random200),  740 → 39 (random500)
+
+LESSON: In any cross-catalysis tracking system, you MUST distinguish "enzyme
+returned substrate unchanged" from "enzyme genuinely transformed substrate
+into something new." Identity is not production.
+
+
+FINDING 1: THE C/G ALPHABET TRAP
+----------------------------------
+2026-02-14 ~14:20 PT
+
+The soup converges to near-total domination by pure C and G strands. After
+100k ops, the top ~12 most persistent strands are all pure {C, G}: CC, CG,
+GC, GG, GCC, CCC, CGG, GGG, CGC, GCG, GGC, CCG.
+
+Why: The four C/G duplets map to:
+  CC → mvl (move left, turn s)
+  CG → cop (copy mode, turn r)
+  GC → inc (insert C, turn r)
+  GG → ing (insert G, turn r)
+
+None of these is 'pun' (punctuation). The duplet AA → pun, which terminates
+the current enzyme and starts a new one. Any strand containing A or T risks
+having AA somewhere in its duplet sequence, splitting its enzyme chain. Pure
+C/G strands have maximal enzyme density — every consecutive pair encodes a
+useful amino, no punctuation breaks.
+
+The competitive advantage is simple: C/G strands encode longer, more complex
+enzymes per unit length. They also tend to survive filterInert (even CC
+encodes [mvl], which is an amino, even though it's nearly useless as a
+catalyst).
+
+A and T bases appear only as transients — strands like CA, CT, AC survive
+briefly (15-33 snapshots) before being evicted or transformed.
+
+This is a form of ALPHABET REDUCTION: the system spontaneously restricts
+itself to a 2-letter subalphabet. This is interesting in its own right but
+limits the enzyme repertoire to {mvl, cop, inc, ing} plus combinations.
+
+
+FINDING 2: THE INSERTION ENZYME ECOSYSTEM
+------------------------------------------
+2026-02-14 ~14:30 PT
+
+With identity ops excluded, the real productive operations in the soup are
+almost exclusively INSERTIONS:
+
+  inc (from GC duplet): Insert C after current position
+  ing (from GG duplet): Insert G after current position
+
+These are the only operations available to pure C/G strands that genuinely
+modify their substrate. The other C/G operations are:
+  cop: Enters copy mode (secondary strand effect, effectively no-op on short strands)
+  mvl: Moves cursor left (positioning only, no modification)
+
+The consequence: the dominant "chemistry" of the soup is just "insert C" and
+"insert G." Strands grow monotonically — there's no cutting (requires AC
+duplet), no deletion (requires AG), no searching. The soup is an insertion-
+only world.
+
+This severely limits the possibility of autocatalytic sets, because:
+1. No strand can be SHORTENED by a pure C/G catalyst
+2. Short strands (GC, GG) must come from somewhere — they're either initial
+   pool members or produced by the rare A/T-containing catalysts
+3. Without cutting, there's no way to close cycles that require fragmenting
+   long strands back into short ones
+
+
+FINDING 3: GENUINE MUTUAL PAIRS EXIST (BUT ARE STRUCTURALLY DEGENERATE)
+------------------------------------------------------------------------
+2026-02-14 ~14:40 PT
+
+The strongest genuine mutual production pair is GGG ↔ GGC:
+
+  GGG and GGC both encode: [ing] binds=G (insert G, bind to G)
+
+  GGG produces GGC: GGG's enzyme acts on substrate "GC" → inserts G → "GGC"
+  GGC produces GGG: GGC's enzyme acts on substrate "GG" → inserts G → "GGG"
+
+  Co-present in 75/102 snapshots (random200) or 99/102 snapshots (random500).
+  Forward: 84-95x, Reverse: 11-95x over 100k ops.
+
+The second strongest pair is GCG ↔ GCC:
+
+  GCG and GCC both encode: [inc] binds=G (insert C, bind to G)
+
+  GCG produces GCC: acts on "GC" → inserts C → "GCC"
+  GCC produces GCG: acts on "GG" → inserts C → "GCG"
+
+  Co-present in 66-93/102 snapshots. Forward: 24-47x, Reverse: 3-24x.
+
+These are REAL mutual pairs — A's enzyme produces B, B's enzyme produces A,
+both through genuine substrate modification.
+
+BUT: both partners in each pair encode the SAME enzyme. GGG and GGC are
+functionally identical ([ing] binds=G). GCG and GCC are functionally identical
+([inc] binds=G). The "mutualism" is really "two slightly different strands
+that encode the same enzyme and produce each other from abundant short
+substrates." The relationship is more like a pair of synonyms than a
+complementary partnership.
+
+There are also prominent SELF-PRODUCERS:
+  GCC produces GCC: GCC[inc] on "GC" @0 → GCC   (68-73x)
+  GGG produces GGG: GGG[ing] on "GG" @0 → GGG   (53-110x)
+
+These are substrate-dependent quasi-replicators. GCC "replicates" by inserting
+C into GC. GGG "replicates" by inserting G into GG. They depend entirely on
+the substrate being available in the pool.
+
+
+FINDING 4: EVICTION STRATEGY DETERMINES EVERYTHING
+----------------------------------------------------
+2026-02-14 ~14:45 PT
+
+  random@200:  103 nodes, 191 edges, 14 cycles, pool stays at cap
+  random@500:  290 nodes, 425 edges, 39 cycles, pool stays at cap
+  oldest@200:  44 unique, 6 edges, 0 cycles, pool NEVER reaches cap (53/200)
+  consumeSource@200:  Collapses to 1 strand within first 1000 ops
+
+Random eviction: Works. Strands persist for tens of thousands of ops.
+Structure has time to emerge. The larger cap (500) produces more diverse
+cycles and stronger mutual pairs because strands interact more before eviction.
+
+Oldest eviction: Lethal to structure. By definition, old strands are evicted
+first, so no strand persists long enough to accumulate production relationships.
+The pool stabilizes at only 53 strands (well below the 200 cap) because most
+operations are identity (cop/mvl), and the few novel productions get evicted
+before they can participate further. 97% of recorded edges were identity.
+
+Consume source: Kills the pool outright. Consuming both catalyst and substrate
+means each operation costs 2 strands and produces 1-2, net neutral or negative.
+With stochastic effects, the pool quickly collapses.
+
+
+FINDING 5: POOL COMPOSITION IS STABLE BUT NOT CONVERGED
+---------------------------------------------------------
+2026-02-14 ~14:50 PT
+
+The pool reaches its cap within the first ~5000 ops and stays there. Unique
+strand count stabilizes around 60-65% of cap (125-130 unique out of 200, or
+300-340 out of 500). This means ~35-40% of the pool consists of duplicates
+of common strands.
+
+The most abundant strand is CC (up to 75 copies in a pool of 500). CC encodes
+[mvl] binds=A — a nearly-inert catalyst that moves left and falls off most
+short strands. CC survives because:
+1. It's produced as a byproduct of many operations
+2. It's too short to be meaningfully transformed by insertion
+3. It passes filterInert (mvl is technically a valid amino)
+4. Random eviction doesn't discriminate against useless strands
+
+CC is the "junk" of this ecosystem — abundant, persistent, catalytically
+worthless, but not removed by any selection pressure.
+
+
+FINDING 6: NO AUTOCATALYTIC SETS FOUND
+----------------------------------------
+2026-02-14 ~14:55 PT
+
+The dream outcome was an autocatalytic set: A produces B, B produces C, C
+produces A, with structurally different enzymes maintaining the cycle.
+
+This was NOT found. The reasons are structural:
+
+1. ALPHABET REDUCTION eliminates enzyme diversity. The soup converges to C/G
+   strands, which can only encode {mvl, cop, inc, ing}. Of these, only inc
+   and ing are productive. That's TWO distinct catalytic operations, not enough
+   for diverse functional complementarity.
+
+2. INSERTION-ONLY CHEMISTRY prevents cycle closure. Insertion enzymes grow
+   strands but can't shrink them. For a cycle A→B→C→A to work, at least one
+   step would need to shorten a strand (cut, delete). Pure C/G enzymes can't
+   do this.
+
+3. UNIVERSAL BINDING PREFERENCE. All four C/G duplets produce enzymes that
+   fold to bind G (or occasionally other bases depending on longer sequences).
+   This means all C/G enzymes compete for the same binding sites, rather than
+   having complementary specificities.
+
+The mutual pairs that do exist (GGG↔GGC, GCG↔GCC) are "degenerate"
+autocatalytic pairs — functionally identical enzymes that produce each other
+incidentally. They're stable but not interesting in the Kauffman sense.
+
+
+OPEN QUESTIONS FOR NEXT SESSION
+---------------------------------
+
+1. CAN WE BREAK THE C/G TRAP? What if we seed the pool with longer strands
+   that contain A/T duplets encoding cut/del/search? Would these survive long
+   enough to enable richer chemistry? Perhaps a pool of ONLY strands containing
+   AC (cut) and AG (del) as initial conditions.
+
+2. DOES TURNING OFF filterInert HELP? Without filterInert, A/T strands persist
+   even if they can't encode enzymes (they're passive substrates). This might
+   maintain substrate diversity at the cost of diluting active catalysts.
+
+3. GILLESPIE-STYLE SAMPLING. The current sim wastes ~50% of attempts on
+   no-ops (no enzyme, no binding site). Pre-classifying strands and weighting
+   selection would increase the density of real interactions.
+
+4. LONGER ENZYMES. The C/G strands that dominate are all short (2-4 bases),
+   encoding 1-2 amino enzymes. What about seeding with 10-20 base strands
+   that encode 5-10 amino enzymes? These could have cut+insert combos that
+   enable cycle closure.
+
+5. COPY MODE DEEP DIVE. The cop amino seems useless on short strands, but
+   enzymes like [cop, mvl, cop] (CGCC) could copy multiple bases, producing
+   meaningful secondary strand fragments. Has this been explored?
+
+
+FINDING 7: THE C/G TRAP IS ROBUST TO INITIAL CONDITIONS
+---------------------------------------------------------
+2026-02-14 ~15:00 PT
+
+Three additional experiments seeding with diverse A/T-containing strands:
+
+  diverse_r200_filterInert:  20 strands including cut+insert, del+insert combos
+  diverse_r500_filterInert:  Same pool, larger cap
+  diverse_massive_r500:      95 strands with 10x copies of A/T inserters (GA, GT)
+
+ALL THREE converge to the same C/G-dominated ecosystem. The initial GA (insert
+A) and GT (insert T) strands, even with 10 copies each, are eliminated within
+the first few thousand ops. The top 30 persistent strands are identical to
+the standard pool experiments.
+
+Also tested: filterInert OFF with diverse pool. Result: fragmentation death
+within seconds — the pool fills with length-1 junk, most attempts fail to
+produce enzymes, simulation grinds to a halt. Confirms the quest doc's warning.
+
+The C/G trap is a STRUCTURAL ATTRACTOR of this system:
+1. C/G strands have maximal enzyme density (no AA punctuation)
+2. The dominant enzymes (inc, ing) only insert C and G, reinforcing the trap
+3. Cut and del enzymes from A/T strands fragment things into C/G-rich pieces
+4. Even A/T-inserting enzymes (ina from GA, int from GT) can't overcome the
+   mass production of C/G strands by the dominant insertion enzymes
+
+This is perhaps the most important finding: Hofstadter's duplet→amino mapping
+creates an inherent asymmetry between {C,G} and {A,T} that drives the system
+toward a reduced alphabet regardless of initial conditions.
+
+
+FINDING 8: COPY MODE REPLICATION
+----------------------------------
+2026-02-14 ~15:05 PT
+
+Brief investigation of copy mode. CGCC encodes [cop, mvl] binds=G. This
+enzyme: (1) enters copy mode at G, writing complement to secondary, (2) moves
+left, writing complement at new position. On substrate "CG" bound at the G:
+
+  Primary: C G     → unchanged: "CG"
+  Secondary: G C   → reversed: "CG"
+
+Result: ["CG", "CG"] — two copies from one. Genuine replication through copy
+mode. CGCC acting on CG doubles the CG count in the pool.
+
+However, CGCC is not very persistent (max 17 consecutive snapshots, count ~5).
+It's present in the pool but not dominant. The reason: CGCC's replication of
+CG competes with the identity operation where CG's own cop enzyme returns CG
+unchanged. The net effect is that CG is abundant anyway.
+
+Copy mode becomes more powerful with longer movement sequences (more positions
+copied), but the C/G trap limits enzyme length and diversity.
+
+
+SESSION 1 SUMMARY
+-------------------
+2026-02-14 ~15:10 PT
+
+The typogenetics soup with cross-strand interactions produces SOME ecological
+structure — genuine mutual production pairs, self-producing quasi-replicators,
+hub-and-spoke production graphs — but falls short of autocatalytic sets.
+
+The central finding is the C/G ALPHABET TRAP: Hofstadter's duplet mapping
+creates a 2-letter subalphabet ({C,G}) that dominates all other bases because:
+(a) no punctuation, (b) self-reinforcing insertion enzymes, (c) maximal enzyme
+density. This limits the enzyme repertoire to two genuinely productive
+operations (insert C, insert G), which is too impoverished for the diverse
+functional complementarity that autocatalytic sets require.
+
+The trap is robust to initial conditions, pool size, and seeding strategy.
+It may be an inherent property of the specific duplet→amino table Hofstadter
+chose, rather than of typogenetics in general.
+
+Experiments run:
+  random200_filterInert     ✓  (baseline)
+  random500_filterInert     ✓  (larger pool)
+  oldest200_filterInert     ✓  (different eviction)
+  random200_consumeSource   ✓  (pool collapses)
+  diverse_r200_filterInert  ✓  (diverse initial pool)
+  diverse_r500_filterInert  ✓  (diverse, larger)
+  diverse_massive_r500      ✓  (massive diverse seeding)
+  diverse_r200_noFilter     ✗  (fragmentation death)
+
+Files in quest/:
+  sim.ts              Headless simulation with 8 configs
+  viz.py              Production graph, composition, cycle visualizations
+  trace.ts            Enzyme operation tracer
+  trace_mutual.ts     Mutual pair mechanism tracer
+  persistence.ts      Strand persistence and mutual pair co-occurrence
+  design_pool.ts      Initial pool design tool
+
+DIRECTIONS FOR NEXT SESSION:
+  1. Modified duplet table — what if AA doesn't map to punctuation?
+  2. Forced alphabet diversity — eviction that penalizes C/G monoculture
+  3. Gillespie sampling — skip no-ops for faster effective dynamics
+  4. Longer time scales — 1M+ ops to see if rare events break the trap
+  5. Copy mode with longer enzymes — can [cop, mvr, mvr, mvr, ...] produce
+     meaningful secondary strand fragments?
+
+
+═══════════════════════════════════════════════════════════════════════════════
+END OF SESSION 1
+═══════════════════════════════════════════════════════════════════════════════
+
+
+═══════════════════════════════════════════════════════════════════════════════
+2026-02-14 15:14 PT  SESSION 2 — Cross-Alphabet Table & Gillespie
+═══════════════════════════════════════════════════════════════════════════════
+
+
+FINDING 9: CROSS-ALPHABET TABLE BREAKS THE C/G TRAP
+-----------------------------------------------------
+2026-02-14 15:10 PT
+
+Jordan's idea: swap the insertion targets in the duplet table so that C/G
+enzymes insert A/T and vice versa. Four entries changed:
+
+  Standard:  GC→inc(C)  GG→ing(G)  GA→ina(A)  GT→int(T)
+  Cross:     GC→ina(A)  GG→int(T)  GA→inc(C)  GT→ing(G)
+
+Result: the C/G trap is COMPLETELY BROKEN. After 500k ops (Gillespie, cap 500):
+
+  Standard table: 64 strands, 61 unique, 39 production edges
+  Cross table:    500 strands, 403 unique, 345 production edges
+
+The cross table maintains ALL FOUR BASES in persistent strands. The top
+persistent strands include ALL 16 possible 2-base combinations:
+CC, TT, GG, TC, AC, GT, GC, TG, TA, CA, CG, CT, GA, AG, AT.
+
+No single alphabet dominates. Max count for any strand is ~100 (transient)
+vs 75+ persistent C/G dominance in standard table.
+
+WHY IT WORKS: The cross table creates mandatory mutualism between alphabets.
+C/G enzymes insert A and T (cross-pollinating into the other alphabet), so
+they can't self-reinforce. A/T enzymes insert C and G, maintaining the
+"other" bases. Each alphabet needs the other to persist. No monoculture is
+self-sustaining.
+
+
+FINDING 10: GENUINE AUTOCATALYTIC TRIANGLE DISCOVERED
+------------------------------------------------------
+2026-02-14 15:12 PT
+
+The Gillespie cross-table run at 500k ops produced 8 cycles. The strongest:
+
+  GA → GGAC → AC → GA    (weight 223)
+
+This is a REAL autocatalytic cycle with THREE DIFFERENT enzyme operations:
+
+  GA  = [inc | binds A]        — inserts C (cross: GA→inc, not ina)
+  GGAC = [int, cut | binds G]  — inserts T then cuts
+  AC  = [cut | binds A]        — cuts
+
+Traced mechanism:
+
+  Step 1: GA acts on substrate "GGA", inserts C after A → produces GGAC
+  Step 2: GGAC acts on substrate "GAC", inserts T then cuts → produces AC + GT
+  Step 3: AC acts on substrate "GAT", cuts after A → produces GA + T
+
+Three strands, three different enzymes, three different substrates, two
+different binding preferences (A and G). Each step uses a DIFFERENT catalytic
+operation (insert C, insert T + cut, cut). The cycle closes.
+
+SUBSTRATE AVAILABILITY: The substrates (GGA, GAC, GAT) are themselves
+produced by pool members:
+  - GGA is produced by GC[ina|G] acting on "GG" → inserts A → "GGA"
+  - GAC is produced by GA[inc|A] acting on "GA" → inserts C → "GAC"
+  - GAT is produced by various A-containing substrates being cut
+
+This means the FULL system including substrates is self-sustaining: the cycle
+members produce each other, and the substrates they need are maintained by
+the broader pool's cross-alphabet dynamics.
+
+BONUS: AC[cut|A] on "GAGA" → [GA, GA]. This is a MULTIPLICATION event —
+one substrate produces TWO copies of a cycle member. The cycle can amplify.
+
+
+FINDING 11: GILLESPIE SAMPLING REVEALS TRUE DYNAMICS
+------------------------------------------------------
+2026-02-14 15:13 PT
+
+Gillespie-style sampling (pick catalyst first, then find compatible target)
+achieves 100% productive ops — every attempt succeeds. This is dramatically
+more efficient:
+
+  Standard random×random: ~50% hit rate (200k attempts for 100k ops)
+  Gillespie: 100% hit rate (500k attempts = 500k ops)
+
+But the more important effect: Gillespie reveals the TRUE steady state. With
+the standard table, Gillespie shows the pool collapses to just 64 strands
+(well below the 500 cap) — proving that the C/G ecosystem is impoverished
+even when given maximum opportunity to interact. The 50% waste in random
+sampling was masking how few real interactions occur.
+
+With the cross table, Gillespie at 500 cap maintains 403 unique strands.
+The system is genuinely diverse, not just noisy.
+
+
+FINDING 12: COMPARISON SUMMARY — STANDARD vs CROSS TABLE
+-----------------------------------------------------------
+2026-02-14 15:46 PT  (written retroactively — session 2 findings were batched; fixed going forward)
+
+  Metric                    Standard (500k)    Cross (500k)
+  ─────────────────────────────────────────────────────────
+  Pool size                      64                500
+  Unique strands                 61                403
+  Production edges               39                345
+  Cycles (len 2-4)              few               8
+  Strongest cycle weight         ~50               223
+  Alphabet diversity             2 bases (C,G)     4 bases
+  Dominant operations            inc, ing          inc, ing, ina, int, cut, del
+  Enzyme binding diversity       mostly G          A, C, G
+
+The cross-alphabet table produces:
+  - 6.6x more unique strands
+  - 8.8x more production edges
+  - Full 4-base alphabet
+  - Cycles with DIVERSE enzyme operations (not just insertion)
+  - The first genuine multi-enzyme autocatalytic cycle found in this system
+
+
+SESSION 2 EXPERIMENTS:
+  cross_r200               ✓  Cross table, cap 200
+  cross_r500               ✓  Cross table, cap 500 (pool collapsed — initial pool too sparse)
+  cross_diverse_r500       ✓  Cross table, diverse pool, cap 500
+  cross_gillespie_r500     ✓  Cross table, Gillespie, 500k ops ← KEY RUN
+  standard_gillespie_r500  ✓  Standard table comparison
+
+FILES ADDED:
+  quest/sim2.ts            Session 2 sim (cross table + Gillespie)
+  quest/trace_cross.ts     Cycle mechanism tracer for cross table
+
+
+DIRECTIONS FOR NEXT SESSION:
+  1. REPLICATE the GA→GGAC→AC→GA cycle — run 10 seeds to see if it emerges
+     reliably or was a lucky one-shot
+  2. LONGER CYCLES — extend cycle search to length 5-6, look for larger
+     autocatalytic sets
+  3. STABILITY ANALYSIS — does the triangle persist once formed? Track its
+     members' pool counts over time, look for emergence/collapse events
+  4. PARAMETER SWEEP on cross table — vary cap size (100-2000), try
+     consume-source, oldest eviction. Find optimal conditions for cycles.
+  5. 1M+ OPS — longer timescales to see if the triangle grows into a larger
+     autocatalytic network
+
+
+═══════════════════════════════════════════════════════════════════════════════
+END OF SESSION 2
+═══════════════════════════════════════════════════════════════════════════════
