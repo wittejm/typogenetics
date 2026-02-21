@@ -11,6 +11,7 @@ export interface ProcessingData {
   enzyme: Enzyme
   strand: string
   boundBase: number
+  sourceStrand?: string
 }
 
 interface ProcessingWindowProps {
@@ -19,12 +20,16 @@ interface ProcessingWindowProps {
   onComplete?: (resultStrands: string[]) => void
   emptyMessage?: string
   subtitle?: string
+  paused?: boolean
+  className?: string
 }
 
-export default function ProcessingWindow({ data, speed, onComplete, emptyMessage, subtitle }: ProcessingWindowProps) {
+export default function ProcessingWindow({ data, speed, onComplete, emptyMessage, subtitle, paused, className }: ProcessingWindowProps) {
   const [states, setStates] = useState<ExecState[]>([])
   const [stepIndex, setStepIndex] = useState(0)
   const [runId, setRunId] = useState(0)
+  const [outputsRevealed, setOutputsRevealed] = useState(false)
+  const [bindingRevealed, setBindingRevealed] = useState(false)
   // Track the last non-null data so we can keep rendering after data goes null
   const displayDataRef = useRef<ProcessingData | null>(null)
   if (data) displayDataRef.current = data
@@ -43,15 +48,35 @@ export default function ProcessingWindow({ data, speed, onComplete, emptyMessage
     setStates(all)
     setStepIndex(0)
     setRunId(r => r + 1)
+    setOutputsRevealed(false)
+    setBindingRevealed(false)
   }, [data])
+
+  // Reveal outputs when animation starts (unpaused with states ready)
+  useEffect(() => {
+    if (!paused && states.length > 0) {
+      setOutputsRevealed(true)
+    }
+  }, [paused, states.length])
+
+  // Reveal binding cursor after strand appears
+  useEffect(() => {
+    if (!outputsRevealed) {
+      setBindingRevealed(false)
+      return
+    }
+    const timer = setTimeout(() => setBindingRevealed(true), 1000)
+    return () => clearTimeout(timer)
+  }, [outputsRevealed])
 
   // Auto-advance through states
   useEffect(() => {
+    if (paused) return
     if (states.length <= 1 || stepIndex >= states.length - 1) return
-    const delay = (stepIndex === 0 ? 800 : 1200) / speed
+    const delay = (stepIndex === 0 ? 3000 : 2000) / speed
     const timer = setTimeout(() => setStepIndex(s => s + 1), delay)
     return () => clearTimeout(timer)
-  }, [stepIndex, states, speed])
+  }, [stepIndex, states, speed, paused])
 
   // Return result strands to the pool when animation completes
   useEffect(() => {
@@ -65,7 +90,7 @@ export default function ProcessingWindow({ data, speed, onComplete, emptyMessage
 
   if (!displayData || states.length === 0) {
     return (
-      <div className="processing-panel">
+      <div className={className ?? "processing-panel"}>
         <div className="processing-empty">
           {emptyMessage ?? 'Select an enzyme, then click a binding site on a target strand.'}
         </div>
@@ -79,16 +104,22 @@ export default function ProcessingWindow({ data, speed, onComplete, emptyMessage
   // aminoIndex: which amino just executed (-1 for initial, 0+ after)
   const aminoIndex = state.pc - 1
   const hasSecondary = state.strand.some(c => c.secondary != null)
-  const results = isComplete ? collectResults(state).map(strandToString) : null
-
   return (
-    <div className="processing-panel">
+    <div className={className ?? "processing-panel"}>
       <h3 className="processing-title">
         Processing
         {subtitle && <span className="processing-subtitle">{subtitle}</span>}
       </h3>
 
       <div key={runId} className="processing-content">
+
+        {/* Source strand */}
+        <div className="processing-source">
+          <span className="processing-label">Source strand (encoding the enzyme)</span>
+          <div className="processing-source-strand">
+            <span className="strand">{displayData.sourceStrand ?? displayData.strand}</span>
+          </div>
+        </div>
 
         {/* Enzyme bar */}
         <div className="processing-enzyme">
@@ -101,25 +132,30 @@ export default function ProcessingWindow({ data, speed, onComplete, emptyMessage
               return isActive ? 'amino-stepping' : isPast ? 'amino-past' : 'amino-future'
             }}
           />
+        </div>
+
+        {/* Target strand */}
+        <div className="processing-target">
+          <span className="processing-label">Target strand</span>
           <div className="processing-source-strand">
             <span className="strand">{displayData.strand}</span>
           </div>
         </div>
 
-        {/* Strand visualization */}
+        {/* Outputs */}
         <div className="processing-strand">
           <span className="processing-label">
-            Strand
+            Outputs
             {state.copyMode && <span className="copy-mode-badge">COPY</span>}
           </span>
-          <div className="strand-display">
+          <div className={`strand-display ${outputsRevealed ? 'outputs-reveal' : 'outputs-hidden'}`}>
             <div className="strand-row">
               {state.strand.map((cell, i) => (
                 <span
                   key={i}
                   className={
                     'base-cell'
-                    + (i === state.cursor && !state.onSecondary && !state.terminated ? ' base-cursor' : '')
+                    + (bindingRevealed && i === state.cursor && !state.onSecondary && !state.terminated ? ' base-cursor' : '')
                   }
                 >
                   {cell.primary || '\u00A0'}
@@ -134,7 +170,7 @@ export default function ProcessingWindow({ data, speed, onComplete, emptyMessage
                     className={
                       'base-cell'
                       + (cell.secondary != null ? ' base-complement' : '')
-                      + (i === state.cursor && state.onSecondary && !state.terminated ? ' base-cursor' : '')
+                      + (bindingRevealed && i === state.cursor && state.onSecondary && !state.terminated ? ' base-cursor' : '')
                     }
                   >
                     {cell.secondary || '\u00A0'}
@@ -175,23 +211,11 @@ export default function ProcessingWindow({ data, speed, onComplete, emptyMessage
 
         {/* Completion */}
         {isComplete && (
-          <>
-            <div className="processing-status">
-              {state.terminated && (state.cursor < 0 || state.cursor >= state.strand.length)
-                ? 'Enzyme fell off the strand'
-                : 'Processing complete'}
-            </div>
-            {results && results.length > 0 && (
-              <div className="processing-results">
-                <span className="processing-label">Result Strands</span>
-                {results.map((strand, i) => (
-                  <div key={i} className="result-strand">
-                    <span className="strand">{strand}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </>
+          <div className="processing-status">
+            {state.terminated && (state.cursor < 0 || state.cursor >= state.strand.length)
+              ? 'Enzyme fell off the strand'
+              : 'Processing complete'}
+          </div>
         )}
       </div>
     </div>

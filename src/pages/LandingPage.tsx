@@ -1,5 +1,9 @@
+import { useState, useCallback, useMemo } from "react";
 import { Link } from "react-router-dom";
 import braidImg from "../assets/braid-trimmed.png";
+import { translate } from "../model/ribosome";
+import EnzymeDisplay from "../EnzymeDisplay";
+import ProcessingWindow, { type ProcessingData } from "../ProcessingWindow";
 
 const INSTRUCTIONS = [
   {
@@ -123,6 +127,65 @@ const DIRECTIONS = [
   { direction: "Up", base: "C" },
 ];
 
+const EXAMPLE_1_ENZYME = translate("GACAAG")[0];
+const EXAMPLE_2_ENZYME = translate("CGCACA")[0];
+
+function LandingDemo({ strand }: { strand: string }) {
+  const [paused, setPaused] = useState(true);
+  const [done, setDone] = useState(false);
+  const [key, setKey] = useState(0);
+
+  const data = useMemo<ProcessingData>(() => {
+    const enzyme = translate(strand)[0];
+    const bindIndex = strand.indexOf(enzyme.bindingPref);
+    return { enzyme, strand, boundBase: bindIndex };
+  }, [strand]);
+
+  const handleComplete = useCallback(() => setDone(true), []);
+
+  function handleReset() {
+    setKey((k) => k + 1);
+    setDone(false);
+    setPaused(true);
+  }
+
+  return (
+    <div className="landing-demo">
+      <ProcessingWindow
+        key={key}
+        data={data}
+        speed={1}
+        paused={paused}
+        onComplete={handleComplete}
+        className="landing-demo-panel"
+        emptyMessage=""
+      />
+      <div className="landing-demo-controls">
+        <button
+          className="landing-demo-btn"
+          onClick={() => {
+            if (done) {
+              handleReset();
+              setPaused(false);
+            } else {
+              setPaused((p) => !p);
+            }
+          }}
+        >
+          {done ? "\u21BB Replay" : paused ? "\u25B6 Play" : "\u23F8 Pause"}
+        </button>
+        <button
+          className="landing-demo-btn"
+          disabled={key === 0 && paused && !done}
+          onClick={handleReset}
+        >
+          Reset
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function LandingPage() {
   return (
     <div className="landing-page">
@@ -159,43 +222,46 @@ export default function LandingPage() {
         enzyme.
       </p>
       <p>
-        For example, the base pair _ encodes the instruction _, and the base
-        pair _ encodes the instruction _. The complete set of 16 base pairs and
-        their corresponding instructions is below. For now, consider the strand
-        containing just these base pairs:
+        For example, the base pair CA encodes the instruction{" "}
+        <strong>Move right</strong>, and the base pair GA encodes{" "}
+        <strong>Insert A</strong>. Consider the strand{" "}
+        <span className="landing-mono">GACAAG</span>, which contains
+        three base pairs &mdash; GA, CA, and AG &mdash; encoding this enzyme:
       </p>
-      <p>AGCGCT (wrong, but it should be "insert A" "move right" "delete" )</p>
-      <p>These strands encode the enzyme</p>
-      <p>_ _ _.</p>
+      <div className="landing-enzyme-preview">
+        <EnzymeDisplay enzyme={EXAMPLE_1_ENZYME} />
+      </div>
       <p>
-        When an enzyme operates on a strand, it initially binds to a particular
-        base in the strand. The base that it binds to is determined by
-        additional rules that read the strand's "tertiary structure", which is
-        explained further along. When the described enzyme operates on the
-        strand that encoded it, the following happens:
+        When an enzyme operates on a strand, it initially binds to a
+        particular base. The base it binds to is determined by the
+        enzyme&rsquo;s &ldquo;tertiary structure&rdquo;, explained further
+        along. This enzyme binds{" "}
+        <span className="landing-mono">A</span>. When it operates on the
+        strand that encoded it, it binds to the first A and executes each
+        instruction in order:
       </p>
-      <p>[animation, with a play(triangle)/pause(lines) button below it.]</p>
+      <LandingDemo strand="GACAAG" />
       <p>
-        In a second example, an enzyme may perform the "copy" and "switch"
-        instructions, which enable an enzyme to operate on a second strand that
-        is next to the original strand. The "copy" instruction activates or
-        deactivates "copy mode", and when the enzyme is in copy mode then, as it
-        moves along the strand, it produces complementary bases on the adjacent
-        strand. The complementary bases are: A and T are complementary, and C
-        and G are complementary. The "switch" instruction moves the location of
-        the enzyme onto the adjacent location on the other strand. For example:
+        In a second example, consider the <strong>Copy</strong> instruction.
+        When an enzyme activates copy mode, each subsequent move along the
+        strand produces a complementary base on an adjacent secondary strand.
+        A and T are complements, and C and G are complements. Consider the
+        strand <span className="landing-mono">CGCACA</span>:
       </p>
+      <div className="landing-enzyme-preview">
+        <EnzymeDisplay enzyme={EXAMPLE_2_ENZYME} />
+      </div>
       <p>
-        Strand: __ __ __ __ __ __ (binds second location, moves right once,
-        enters copy mode, moves right twice, inserts something, switches, moves,
-        inserts something)
+        This enzyme binds <span className="landing-mono">G</span>,
+        activates copy mode, and moves right twice. As it moves,
+        complementary bases appear on the secondary strand:
       </p>
-      <p>Enzyme:</p>
-      <p>[animation]</p>
+      <LandingDemo strand="CGCACA" />
       <p>
-        The types of operations are: insert, delete, move, copy, and switch. In
-        all, there are 16 base pairs and their 16 unique operations. The
-        translation table from base pairs to instructions is as follows:
+        Other instructions include <strong>Cut</strong> (splits the strand),{" "}
+        <strong>Switch</strong> (jumps to the secondary strand), and various
+        search operations. The complete set of 16 base pairs and their
+        instructions:
       </p>
 
       <h2 className="landing-h2">Base Pairs and Instructions</h2>

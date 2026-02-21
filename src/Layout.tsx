@@ -6,6 +6,9 @@ export default function Layout() {
       <header className="app-header">
         <Link to="/" className="app-title">Typogenetics</Link>
         <nav className="app-nav">
+          <NavLink to="/" end className={({ isActive }) => 'nav-link' + (isActive ? ' nav-link-active' : '')}>
+            Intro
+          </NavLink>
           <NavLink to="/interactive" className={({ isActive }) => 'nav-link' + (isActive ? ' nav-link-active' : '')}>
             Interactive
           </NavLink>
