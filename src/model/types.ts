@@ -38,7 +38,9 @@ export const COMPLEMENT: ReadonlyMap<Base, Base> = new Map([
   ['G', 'C'],
 ])
 
-export const DUPLET_MAP: ReadonlyMap<string, [Amino | 'pun', Turn | null]> = new Map([
+export type DupletTable = ReadonlyMap<string, [Amino | 'pun', Turn | null]>
+
+export const DUPLET_MAP: DupletTable = new Map([
   ['AA', ['pun', null]],
   ['AC', ['cut', 's']],
   ['AG', ['del', 's']],
@@ -55,4 +57,14 @@ export const DUPLET_MAP: ReadonlyMap<string, [Amino | 'pun', Turn | null]> = new
   ['TC', ['rpu', 'l']],
   ['TG', ['lpy', 'l']],
   ['TT', ['lpu', 'l']],
+])
+
+// Cross-alphabet table: swap insertion targets among G-duplets
+// GA↔GC (ina↔inc) and GG↔GT (ing↔int)
+export const CROSS_TABLE: DupletTable = new Map([
+  ...DUPLET_MAP,
+  ['GA', ['inc', 's']],
+  ['GC', ['ina', 'r']],
+  ['GG', ['int', 'r']],
+  ['GT', ['ing', 'l']],
 ])

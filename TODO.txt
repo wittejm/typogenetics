@@ -1,13 +1,33 @@
-Close the game loop
-- Result strands from processing must be added back to the strand pool
-- Only the target strand is consumed; the source strand stays (it produced the enzyme, it isn't destroyed)
-- Unless self-targeting: then the strand is consumed once (it's the target)
+so let's briefly ideate both spatial and also energy. Ideate energy for a minute with me.        
+  what if something IS consumed?                                                                                                 
+                                                                                                                                  
+⏺ OK — what if bases are conserved?                                                                                               
+                                                                                                                                  
+  Right now insertion is free. inc conjures a C from nowhere. What if there's a free base pool — a finite supply of A, C, G, T    
+  floating in the soup?
+                                                                                                                                  
+  - Insertion (ina/inc/ing/int) draws from the free pool. If that base isn't available, the insertion fails — the amino is a no-op
+   and the enzyme continues.
+  - Deletion (del) returns the deleted base to the free pool.
+  - Eviction returns all of a strand's bases to the free pool.
+  - Total base count across all strands + free pool is conserved.
 
-Allow self-targeting
-- Remove the !isSource guard from isValidTarget
-- Source strand should show bindable bases when it contains the binding pref
-- Clicking source strand body should trigger pulse/bind, not deselect
-- Deselection only via clicking the enzyme badge again
+  Here's why this might break the C/G trap naturally, without any designed selection pressure:
 
-Entrance animation for result strands
-- When results return to the pool, animate them in (fade/slide)
+  In the current system, inc and ing spam C's and G's from nothing. They win because they can grow forever for free. With
+  conservation, they run out of fuel. The free C and G supply gets depleted as the inserters consume it.
+
+  Now: what frees up bases? Cutting and deletion. Cut comes from AC duplet. Del comes from AG duplet. Both require A-containing
+  strands — exactly the strands that the C/G trap kills off.
+
+  So conservation creates a natural mutualism:
+  - C/G strands are good inserters (consumers of bases)
+  - A-containing strands are good cutters/deleters (producers of free bases)
+  - Neither can survive without the other
+  - The C/G monoculture starves itself
+
+  That's not a thumb on the scale. That's a conservation law producing ecological interdependence — the same way real catabolism
+  (breaking down) feeds anabolism (building up).
+
+  You could start the soup with, say, 500 total bases distributed across initial strands plus a small free pool, and watch whether
+   the economy self-organizes.

@@ -1,0 +1,156 @@
+Plan to implement                                                                                                              │
+│                                                                                                                                │
+│ Spatial Typogenetics Soup — Implementation Plan                                                                                │
+│                                                                                                                                │
+│ Context                                                                                                                        │
+│                                                                                                                                │
+│ The typogenetics project has a working "mixed" (well-mixed) stochastic soup where any strand can react with any other strand.  │
+│ Findings show the soup collapses to a C/G monoculture due to lack of structural constraints. Adding spatial locality — strands │
+│  on a 2D grid that can only react with neighbors — is the most promising extension for producing qualitatively different       │
+│ emergent behavior (local ecosystems, boundaries, cluster persistence).                                                         │
+│                                                                                                                                │
+│ Architecture                                                                                                                   │
+│                                                                                                                                │
+│ New files                                                                                                                      │
+│                                                                                                                                │
+│ - src/soup/shared.ts — Extract shared utilities from existing worker                                                           │
+│ - src/spatial/types.ts — Spatial config and stats types                                                                        │
+│ - src/spatial/grid.ts — Grid data structure and operations (pure functions)                                                    │
+│ - src/spatial/worker.ts — Spatial simulation web worker                                                                        │
+│ - src/spatial/GridCanvas.tsx — Canvas heatmap visualization component                                                          │
+│ - src/pages/SpatialSoupPage.tsx — New page component                                                                           │
+│                                                                                                                                │
+│ Modified files                                                                                                                 │
+│                                                                                                                                │
+│ - src/soup/worker.ts — Refactor to import from shared.ts (no behavior change)                                                  │
+│ - src/App.tsx — Add /soup/spatial route                                                                                        │
+│ - src/Layout.tsx — Replace "Soup" NavLink with a dropdown (Simple / Spatial)                                                    │
+│ - src/App.css — Add dropdown CSS + spatial page CSS                                                                            │
+│                                                                                                                                │
+│ Unchanged                                                                                                                      │
+│                                                                                                                                │
+│ - All of src/model/ — reused directly by spatial worker                                                                        │
+│                                                                                                                                │
+│ Implementation Steps                                                                                                           │
+│                                                                                                                                │
+│ Step 1: Extract shared utilities (src/soup/shared.ts)                                                                          │
+│                                                                                                                                │
+│ Extract from src/soup/worker.ts:                                                                                               │
+│ - EvictionRule type                                                                                                            │
+│ - pickRandom<T>(arr: T[]): [T, number]                                                                                         │
+│ - cachedTranslate(strand, cache) — parameterized with cache map                                                                │
+│ - recordProduction(graph, source, result) — parameterized with graph map                                                       │
+│ - pruneGraph(graph, poolSet) — parameterized with graph map                                                                    │
+│ - computeBaseStats(pool, ops, attempts, graph) — returns stats object                                                          │
+│                                                                                                                                │
+│ Then refactor src/soup/worker.ts to import these. Verify existing Soup page still works.                                       │
+│                                                                                                                                │
+│ Step 2: Grid data structure (src/spatial/grid.ts)                                                                              │
+│                                                                                                                                │
+│ Flat array of cells: string[][] where grid[cellIndex] is the strands in that cell. Index arithmetic: idx(row, col, width) =    │
+│ row * width + col.                                                                                                             │
+│                                                                                                                                │
+│ Functions:                                                                                                                     │
+│ - idx, rowCol, neighbors — coordinate helpers                                                                                  │
+│ - initGrid(strands, width, height) — distribute initial strands randomly across cells                                          │
+│ - diffuse(grid, width, height, rate) — each strand has probability rate of moving to a random adjacent cell. Mutates in place. │
+│ - enforceCrowding(grid, width, height, cellCapacity) — cells over capacity push excess to random neighbor; if neighbor full,   │
+│ strand is evicted. Mutates in place.                                                                                           │
+│ - computeDensity(grid) — returns number[] of strand counts per cell                                                            │
+│ - flattenGrid(grid) — returns all strands as a single string[] for global stats                                                │
+│                                                                                                                                │
+│ Step 3: Spatial types (src/spatial/types.ts)                                                                                   │
+│                                                                                                                                │
+│ export type SpatialConfig = {                                                                                                  │
+│   gridWidth: number        // default 32                                                                                       │
+│   gridHeight: number       // default 32                                                                                       │
+│   cellCapacity: number     // default 8                                                                                        │
+│   diffusionRate: number    // default 0.05                                                                                     │
+│   evictionRule: EvictionRule                                                                                                   │
+│   consumeSource: boolean                                                                                                       │
+│   filterInert: boolean                                                                                                         │
+│ }                                                                                                                              │
+│                                                                                                                                │
+│ export type SpatialStats = {                                                                                                   │
+│   type: 'stats'                                                                                                                │
+│   ops: number                                                                                                                  │
+│   attempts: number                                                                                                             │
+│   totalStrands: number                                                                                                         │
+│   uniqueCount: number                                                                                                          │
+│   gridWidth: number                                                                                                            │
+│   gridHeight: number                                                                                                           │
+│   density: number[]                                                                                                            │
+│   topStrands: [string, number][]                                                                                               │
+│   topEdges: [string, string, number][]                                                                                         │
+│   mutualPairs: [string, string, number, number][]                                                                              │
+│ }                                                                                                                              │
+│                                                                                                                                │
+│ Step 4: Spatial worker (src/spatial/worker.ts)                                                                                 │
+│                                                                                                                                │
+│ Same structure as src/soup/worker.ts. Key difference in the reaction loop:                                                     │
+│                                                                                                                                │
+│ 1. Pick a random non-empty cell                                                                                                │
+│ 2. Pick a random source strand from that cell                                                                                  │
+│ 3. Translate → get enzymes                                                                                                     │
+│ 4. Pick random enzyme                                                                                                          │
+│ 5. Collect all strands from same cell + adjacent cells as candidate targets (with cell/index tracking so we can remove from    │
+│ the correct cell)                                                                                                              │
+│ 6. Pick target from this local pool, find binding positions                                                                    │
+│ 7. Execute reaction (reusing model/ functions)                                                                                 │
+│ 8. Remove target from its cell, add products to source's cell                                                                  │
+│ 9. After each batch: run diffuse() and enforceCrowding()                                                                       │
+│                                                                                                                                │
+│ Messages: same protocol as soup worker (start/stop/pause/resume/config), with start carrying gridWidth/gridHeight and stats    │
+│ including density array.                                                                                                       │
+│                                                                                                                                │
+│ Step 5: Grid canvas (src/spatial/GridCanvas.tsx)                                                                               │
+│                                                                                                                                │
+│ Canvas element that draws a heatmap from the density array. Color ramp: white (empty) → yellow → orange → red (at capacity).   │
+│ Repaints in useEffect when density changes, throttled via requestAnimationFrame. Canvas dimensions: 480x480 with               │
+│ image-rendering: pixelated. Mouse hover shows cell coordinates + strand count.                                                 │
+│                                                                                                                                │
+│ Step 6: Spatial page (src/pages/SpatialSoupPage.tsx)                                                                           │
+│                                                                                                                                │
+│ Mirrors SoupPage.tsx structure:                                                                                                │
+│ - Worker management via useRef<Worker>                                                                                         │
+│ - Controls: Start/Pause/Resume/Reset + grid size + cell capacity + diffusion rate slider                                       │
+│ - Config: eviction rule, consume source, filter inert (reuse soup CSS classes)                                                 │
+│ - Display: stats line, canvas heatmap, sparkline, mutual production, top edges, top strands                                    │
+│                                                                                                                                │
+│ Reuses all existing soup CSS classes for the stats sections.                                                                   │
+│                                                                                                                                │
+│ Step 7: Navigation dropdown                                                                                                    │
+│                                                                                                                                │
+│ Layout.tsx: Replace the Soup <NavLink> with:                                                                                   │
+│ <div className="nav-dropdown">                                                                                                 │
+│   <span className={`nav-link ${soupActive ? 'nav-link-active' : ''}`}>Soup</span>                                              │
+│   <div className="nav-dropdown-menu">                                                                                          │
+│     <NavLink to="/soup" end ...>Mixed</NavLink>                                                                                │
+│     <NavLink to="/soup/spatial" ...>Spatial</NavLink>                                                                          │
+│   </div>                                                                                                                       │
+│ </div>                                                                                                                         │
+│ Where soupActive = location.pathname.startsWith('/soup') via useLocation().                                                    │
+│                                                                                                                                │
+│ App.tsx: Add route <Route path="soup/spatial" element={<SpatialSoupPage />} />.                                                │
+│                                                                                                                                │
+│ App.css: ~40 lines for dropdown positioning (absolute, hover to reveal) and ~20 lines for spatial-specific styles (canvas      │
+│ container, slider, layout).                                                                                                    │
+│                                                                                                                                │
+│ Build Order                                                                                                                    │
+│                                                                                                                                │
+│ 1. src/soup/shared.ts + refactor src/soup/worker.ts → verify existing soup works                                               │
+│ 2. src/spatial/types.ts + src/spatial/grid.ts (pure logic, no UI)                                                              │
+│ 3. src/spatial/worker.ts (simulation engine)                                                                                   │
+│ 4. src/spatial/GridCanvas.tsx + src/pages/SpatialSoupPage.tsx (UI)                                                             │
+│ 5. src/App.tsx + src/Layout.tsx + src/App.css (routing + nav + styles)                                                         │
+│                                                                                                                                │
+│ Verification                                                                                                                   │
+│                                                                                                                                │
+│ 1. Existing Soup page works identically after shared extraction (step 1)                                                       │
+│ 2. npm run dev — navigate to Soup dropdown, both "Mixed" and "Spatial" links work                                              │
+│ 3. Start spatial simulation — grid heatmap renders and updates live                                                            │
+│ 4. Strands cluster locally rather than uniformly filling the grid                                                              │
+│ 5. Reactions produce visible local patterns (dense regions, sparse regions)                                                    │
+│ 6. Diffusion rate slider visibly affects how fast strands spread                                                               │
+│ 7. All existing pages (Intro, Interactive, Search, Mixed Soup) unaffected                                                      │
+│ 8. npm run build succeeds cleanly   

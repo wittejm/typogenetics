@@ -9,29 +9,42 @@ type Stats = {
   attempts: number
   poolSize: number
   uniqueCount: number
-  topStrands: [string, number][]
-  topEdges: [string, string, number][]
+  topStrands: [string, number, number[]][]
+  topTriples: [string, string, string, number][]
   mutualPairs: [string, string, number, number][]
+  triangles: [string, string, string, number][]
 }
-
-type HistoryPoint = { ops: number; poolSize: number }
 
 const EMPTY_STATS: Stats = {
   ops: 0, attempts: 0, poolSize: 0, uniqueCount: 0,
-  topStrands: [], topEdges: [], mutualPairs: [],
+  topStrands: [], topTriples: [], mutualPairs: [], triangles: [],
 }
-const MAX_HISTORY = 300
+
+function Sparkline({ data }: { data: number[] }) {
+  if (data.length < 2) return null
+  const max = Math.max(...data)
+  if (max === 0) return null
+  const w = 60, h = 18
+  const points = data.map((v, i) =>
+    `${(i / (data.length - 1)) * w},${h - (v / max) * h}`
+  ).join(' ')
+  return (
+    <svg className="soup-sparkline" width={w} height={h} viewBox={`0 0 ${w} ${h}`}>
+      <polyline points={points} fill="none" stroke="rgba(0,119,204,0.6)" strokeWidth="1.5" />
+    </svg>
+  )
+}
 
 type WorkerState = 'idle' | 'running' | 'paused' | 'done'
 
 export default function SoupPage() {
   const [workerState, setWorkerState] = useState<WorkerState>('idle')
   const [stats, setStats] = useState<Stats>(EMPTY_STATS)
-  const [history, setHistory] = useState<HistoryPoint[]>([])
   const [evictionRule, setEvictionRule] = useState<EvictionRule>('none')
   const [capSize, setCapSize] = useState(500)
   const [consumeSource, setConsumeSource] = useState(false)
   const [filterInert, setFilterInert] = useState(false)
+  const [crossTable, setCrossTable] = useState(false)
   const workerRef = useRef<Worker | null>(null)
 
   const sendConfig = useCallback(() => {
@@ -41,8 +54,9 @@ export default function SoupPage() {
       evictionRule,
       consumeSource,
       filterInert,
+      crossTable,
     })
-  }, [evictionRule, capSize, consumeSource, filterInert])
+  }, [evictionRule, capSize, consumeSource, filterInert, crossTable])
 
   useEffect(() => {
     sendConfig()
@@ -62,14 +76,11 @@ export default function SoupPage() {
           poolSize: e.data.poolSize,
           uniqueCount: e.data.uniqueCount,
           topStrands: e.data.topStrands,
-          topEdges: e.data.topEdges,
+          topTriples: e.data.topTriples,
           mutualPairs: e.data.mutualPairs,
+          triangles: e.data.triangles,
         }
         setStats(s)
-        setHistory(prev => {
-          const next = [...prev, { ops: s.ops, poolSize: s.poolSize }]
-          return next.length > MAX_HISTORY ? next.slice(next.length - MAX_HISTORY) : next
-        })
       } else if (e.data.type === 'done') {
         setWorkerState('done')
       }
@@ -81,7 +92,6 @@ export default function SoupPage() {
 
   function handleStart() {
     setStats(EMPTY_STATS)
-    setHistory([])
 
     const w = spawnWorker()
     w.postMessage({
@@ -90,6 +100,7 @@ export default function SoupPage() {
       evictionRule,
       consumeSource,
       filterInert,
+      crossTable,
     })
     w.postMessage({ type: 'start', pool: initialStrands })
     setWorkerState('running')
@@ -111,29 +122,11 @@ export default function SoupPage() {
     workerRef.current = null
     setWorkerState('idle')
     setStats(EMPTY_STATS)
-    setHistory([])
   }
 
   useEffect(() => {
     return () => { workerRef.current?.terminate() }
   }, [])
-
-  // Sparkline dimensions
-  const sparkW = 300
-  const sparkH = 40
-
-  let sparkPath = ''
-  if (history.length > 1) {
-    const maxPool = Math.max(...history.map(h => h.poolSize), 1)
-    const xStep = sparkW / (history.length - 1)
-    sparkPath = history
-      .map((h, i) => {
-        const x = i * xStep
-        const y = sparkH - (h.poolSize / maxPool) * (sparkH - 2) - 1
-        return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`
-      })
-      .join('')
-  }
 
   return (
     <div className="soup-page">
@@ -213,62 +206,119 @@ export default function SoupPage() {
           />
           Filter inert
         </label>
+
+        <label className="soup-label soup-checkbox-label">
+          <input
+            type="checkbox"
+            checked={crossTable}
+            onChange={e => setCrossTable(e.target.checked)}
+          />
+          <span
+            className="soup-tooltip"
+            title="Swap insertion targets: GA↔GC (ina↔inc) and GG↔GT (ing↔int). Breaks the C/G alphabet trap by letting C/G-only strands insert A/T and vice versa."
+          >
+            Cross-table
+          </span>
+        </label>
       </div>
 
-      {history.length > 1 && (
-        <div className="soup-sparkline-container">
-          <span className="soup-sparkline-label">Pool size</span>
-          <svg className="soup-sparkline" viewBox={`0 0 ${sparkW} ${sparkH}`} preserveAspectRatio="none">
-            <path d={sparkPath} fill="none" stroke="currentColor" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
-          </svg>
-        </div>
-      )}
+      {(() => {
+        const maxCount = stats.topStrands[0]?.[1] ?? 1
+        const rows = 20
+        return (
+          <div className="soup-top-strands">
+            <h3 className="soup-section-header">Top Strands</h3>
+            <div className="soup-bar-chart">
+              {Array.from({ length: rows }, (_, i) => {
+                const entry = stats.topStrands[i]
+                if (!entry) {
+                  return <div key={i} className="soup-bar-row soup-bar-row-empty"><div className="soup-bar-label" /><div className="soup-bar-track" /><span className="soup-bar-count" /></div>
+                }
+                const [strand, count, history] = entry
+                return (
+                  <div key={`${strand}-${i}`} className="soup-bar-row">
+                    <div className="soup-bar-label">
+                      <StrandWithTooltip strand={strand} />
+                    </div>
+                    <div className="soup-bar-track">
+                      <div
+                        className="soup-bar-fill"
+                        style={{ width: `${(count / maxCount) * 100}%` }}
+                      />
+                    </div>
+                    <Sparkline data={history} />
+                    <span className="soup-bar-count">{count}</span>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )
+      })()}
 
-      {stats.mutualPairs.length > 0 && (
-        <div className="soup-mutual-section">
-          <h3 className="soup-section-header">Mutual Production</h3>
-          <div className="soup-edge-list">
-            {stats.mutualPairs.map(([a, b, fwd, rev], i) => (
+      <div className="soup-mutual-section">
+        <h3 className="soup-section-header">Mutual Production</h3>
+        <div className="soup-edge-list">
+          {Array.from({ length: 10 }, (_, i) => {
+            const entry = stats.mutualPairs[i]
+            if (!entry) {
+              return <div key={i} className="soup-edge-entry soup-edge-entry-empty">&nbsp;</div>
+            }
+            const [a, b, fwd, rev] = entry
+            return (
               <div key={i} className="soup-edge-entry soup-mutual-entry">
                 <StrandWithTooltip strand={a} />
                 <span className="soup-edge-arrow soup-mutual-arrow">&hArr;</span>
                 <StrandWithTooltip strand={b} />
                 <span className="soup-edge-counts">&rarr;{fwd} &larr;{rev}</span>
               </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {stats.triangles.length > 0 && (
+        <div className="soup-triangle-section">
+          <h3 className="soup-section-header">Hypercycles (3-cycles)</h3>
+          <div className="soup-edge-list">
+            {stats.triangles.map(([a, b, c, score], i) => (
+              <div key={i} className="soup-edge-entry soup-triangle-entry">
+                <StrandWithTooltip strand={a} />
+                <span className="soup-edge-arrow soup-triangle-arrow">&rarr;</span>
+                <StrandWithTooltip strand={b} />
+                <span className="soup-edge-arrow soup-triangle-arrow">&rarr;</span>
+                <StrandWithTooltip strand={c} />
+                <span className="soup-edge-arrow soup-triangle-arrow">&rarr;</span>
+                <StrandWithTooltip strand={a} />
+                <span className="soup-edge-counts">&times;{score}</span>
+              </div>
             ))}
           </div>
         </div>
       )}
 
-      {stats.topEdges.length > 0 && (
-        <div className="soup-graph-section">
-          <h3 className="soup-section-header">Top Production Edges</h3>
-          <div className="soup-edge-list">
-            {stats.topEdges.map(([src, tgt, count], i) => (
-              <div key={i} className="soup-edge-entry">
+      <div className="soup-graph-section">
+        <h3 className="soup-section-header">Enzyme + Strand = Result</h3>
+        <div className="soup-edge-list">
+          {Array.from({ length: 10 }, (_, i) => {
+            const entry = stats.topTriples[i]
+            if (!entry) {
+              return <div key={i} className="soup-edge-entry soup-edge-entry-empty">&nbsp;</div>
+            }
+            const [src, tgt, res, count] = entry
+            return (
+              <div key={i} className="soup-edge-entry soup-triple-entry">
                 <StrandWithTooltip strand={src} />
-                <span className="soup-edge-arrow">&rarr;</span>
+                <span className="soup-edge-arrow">+</span>
                 <StrandWithTooltip strand={tgt} />
+                <span className="soup-edge-arrow">=</span>
+                <StrandWithTooltip strand={res} />
                 <span className="soup-edge-counts">&times;{count}</span>
               </div>
-            ))}
-          </div>
+            )
+          })}
         </div>
-      )}
-
-      {stats.topStrands.length > 0 && (
-        <div className="soup-top-strands">
-          <h3 className="soup-section-header">Top Strands</h3>
-          <div className="soup-strand-list">
-            {stats.topStrands.map(([strand, count], i) => (
-              <div key={`${strand}-${i}`} className="soup-strand-entry">
-                <StrandWithTooltip strand={strand} />
-                <span className="soup-strand-count">&times;{count}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      </div>
 
       {workerState === 'done' && (
         <div className="soup-extinct">Pool went extinct at op {stats.ops.toLocaleString()}.</div>

@@ -1,14 +1,14 @@
-import type { Amino, Base, Enzyme } from './types'
+import type { Amino, Base, DupletTable, Enzyme } from './types'
 import { DUPLET_MAP } from './types'
 
-export function translate(strand: string): Enzyme[] {
+export function translate(strand: string, table: DupletTable = DUPLET_MAP): Enzyme[] {
   const results: Enzyme[] = []
   let current: Amino[] = []
   let direction = 0
 
   for (let i = 0; i + 1 < strand.length; i += 2) {
     const duplet = strand.slice(i, i + 2)
-    const entry = DUPLET_MAP.get(duplet)
+    const entry = table.get(duplet)
     if (!entry) continue
     const [amino, turn] = entry
 
